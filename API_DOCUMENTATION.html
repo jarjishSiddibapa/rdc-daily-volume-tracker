@@ -179,7 +179,7 @@
       <a href="#step1">1. Get a token</a>
       <a href="#volumes">2. Volume data (daily / monthly / yearly)</a>
       <a href="#postman">Postman setup</a>
-      <a href="#verified">Live verification</a>
+      <a href="#examples">Response examples</a>
       <a href="#errors">Errors</a>
     </nav>
   </header>
@@ -260,14 +260,14 @@ Authorization: Bearer dvt_x7QpK2mF9...
   "period": "daily",
   "date": "2026-07-17",
   "metric": "produced",
-  "count": 135,
+  "count": 2,
   "plants": [
     {
-      "plant_code": "FR2",
-      "daily_tracker_name": "NCR-Faridabad",
-      "erp_name": "Faridabad-Mathura Road",
-      "plant_name": "NCR-Faridabad (Faridabad-Mathura Road)",
-      "region": "DELHI NCR",
+      "plant_code": "PLANT-01",
+      "daily_tracker_name": "Example Plant",
+      "erp_name": "Example ERP Plant",
+      "plant_name": "Example Plant (Example ERP Plant)",
+      "region": "Example Region",
       "is_manual_entry": false,
       "volume": 103.5
     }
@@ -288,9 +288,9 @@ Authorization: Bearer dvt_x7QpK2mF9...
   "period": "monthly",
   "month": "2026-07-01",
   "metric": "produced",
-  "count": 135,
+  "count": 2,
   "plants": [
-    { "plant_code": "FR2", "...": "...", "volume": 4259.0 }
+    { "plant_code": "PLANT-01", "...": "...", "volume": 4259.0 }
   ]
 }</code></pre>
 
@@ -308,16 +308,16 @@ Authorization: Bearer dvt_x7QpK2mF9...
   "period": "yearly",
   "year": 2026,
   "metric": "produced",
-  "count": 135,
+  "count": 2,
   "plants": [
     {
-      "plant_code": "FR2",
+      "plant_code": "PLANT-01",
       "...": "...",
-      "volume": 39614.25,
+      "volume": 12000.0,
       "monthly_breakdown": {
-        "2026-01": 4091.0, "2026-02": 6445.0, "2026-03": 5562.0,
-        "2026-04": 7593.5, "2026-05": 5799.0, "2026-06": 5864.75,
-        "2026-07": 4259.0, "2026-08": 0.0, "2026-09": 0.0,
+        "2026-01": 1000.0, "2026-02": 1100.0, "2026-03": 1200.0,
+        "2026-04": 1300.0, "2026-05": 1400.0, "2026-06": 1500.0,
+        "2026-07": 1600.0, "2026-08": 1700.0, "2026-09": 0.0,
         "2026-10": 0.0, "2026-11": 0.0, "2026-12": 0.0
       }
     }
@@ -365,9 +365,9 @@ Authorization: Bearer dvt_x7QpK2mF9...
     </ol>
   </div>
 
-  <h2 id="verified">Live verification</h2>
+  <h2 id="examples">Response examples</h2>
   <div class="card">
-    <p>All endpoints were driven end-to-end against a real running instance of this app (2026-07-27) — not simulated. A disposable test account was used and deleted immediately after; no real user data was touched or exposed. The values below are the actual captured output.</p>
+    <p>The examples below show the response shape with placeholder values. Run the requests against your own configured deployment to verify connectivity and data.</p>
 
     <h3>1. Correct credentials → token issued</h3>
     <pre><code>POST /api/v1/token
@@ -385,31 +385,31 @@ Authorization: Bearer dvt_x7QpK2mF9...
 
     <h3>3. Daily volume, produced (default)</h3>
     <pre><code>GET /api/v1/volumes/daily?date=2026-07-17
-→ 200 OK — period=daily, date=2026-07-17, metric=produced, count=135
-sample: {"plant_code":"FR2","plant_name":"NCR-Faridabad (Faridabad-Mathura Road)","region":"DELHI NCR","is_manual_entry":false,"volume":103.5}</code></pre>
+→ 200 OK — period=daily, date=2026-07-17, metric=produced, count=2
+sample: {"plant_code":"PLANT-01","plant_name":"Example Plant","region":"Example Region","is_manual_entry":false,"volume":103.5}</code></pre>
 
     <h3>4. Daily volume, invoiced, default date</h3>
     <pre><code>GET /api/v1/volumes/daily?metric=invoiced
-→ 200 OK — period=daily, date=2026-07-27 (today, no date given), metric=invoiced, count=135</code></pre>
+→ 200 OK — period=daily, date=2026-07-17 (today, no date given), metric=invoiced, count=2</code></pre>
 
     <h3>5. Monthly volume</h3>
     <pre><code>GET /api/v1/volumes/monthly?month=2026-07
-→ 200 OK — period=monthly, month=2026-07-01, metric=produced, count=135
-sample: {"plant_code":"FR2", "...": "...", "volume": 4259.0}</code></pre>
+→ 200 OK — period=monthly, month=2026-07-01, metric=produced, count=2
+sample: {"plant_code":"PLANT-01", "...": "...", "volume": 1600.0}</code></pre>
 
     <h3>6. Yearly volume with monthly breakdown</h3>
     <pre><code>GET /api/v1/volumes/yearly?year=2026
-→ 200 OK — period=yearly, year=2026, metric=produced, count=135
+→ 200 OK — period=yearly, year=2026, metric=produced, count=2
 sample: {
-  "plant_code": "FR2", "...": "...", "volume": 39614.25,
+  "plant_code": "PLANT-01", "...": "...", "volume": 12000.0,
   "monthly_breakdown": {
-    "2026-01": 4091.0, "2026-02": 6445.0, "2026-03": 5562.0, "2026-04": 7593.5,
-    "2026-05": 5799.0, "2026-06": 5864.75, "2026-07": 4259.0,
-    "2026-08": 0.0, "2026-09": 0.0, "2026-10": 0.0, "2026-11": 0.0, "2026-12": 0.0
+    "2026-01": 1000.0, "2026-02": 1100.0, "2026-03": 1200.0, "2026-04": 1300.0,
+    "2026-05": 1400.0, "2026-06": 1500.0, "2026-07": 1600.0,
+    "2026-08": 1700.0, "2026-09": 0.0, "2026-10": 0.0, "2026-11": 0.0, "2026-12": 0.0
   }
 }</code></pre>
 
-    <h3>7. Every validation error, confirmed live</h3>
+    <h3>7. Validation errors</h3>
     <pre><code>GET /api/v1/volumes/daily?date=bad          → 400 {"error": "Invalid date. Use YYYY-MM-DD."}
 GET /api/v1/volumes/monthly?month=bad        → 400 {"error": "Invalid month. Use YYYY-MM."}
 GET /api/v1/volumes/yearly?year=99999        → 400 {"error": "Invalid year. Use a 4-digit year, e.g. 2026."}
@@ -427,7 +427,7 @@ GET /api/v1/volumes/monthly (no token)       → 401 {"error": "Missing API toke
     </ul>
   </div>
 
-  <footer>Daily Volume Tracker — internal API documentation</footer>
+  <footer>Daily Volume Tracker — API documentation</footer>
 </div>
 </body>
 </html>

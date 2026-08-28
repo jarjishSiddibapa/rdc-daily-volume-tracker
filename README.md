@@ -1,6 +1,18 @@
 # RDC Daily Volume Tracker
 
+[![CI](https://github.com/jarjishSiddibapa/rdc-daily-volume-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/jarjishSiddibapa/rdc-daily-volume-tracker/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Flask](https://img.shields.io/badge/Flask-3.1-000000?logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
+
 A Flask application for tracking ready-mix concrete production volumes across plants and regions. It combines manual volume entry with Oracle ERP synchronization, dashboards, analytics, Excel exports, user access controls, email alerts, and scheduled MySQL backups.
+
+## Product tour
+
+The application uses a focused, dark-mode-first interface with an optional light theme. These screenshots are from the local application and contain no production data.
+
+| Authentication | Public API reference |
+| --- | --- |
+| ![RDC DVT login screen](docs/images/login.png) | ![Public API documentation](docs/images/api-documentation.png) |
 
 ## Features
 
@@ -104,6 +116,43 @@ server.py       Waitress entry point with rotating request logs
 
 The detailed REST API reference is available in [`API_DOCUMENTATION.html`](API_DOCUMENTATION.html).
 
+## Documentation map
+
+- [Architecture](docs/ARCHITECTURE.md) — components, data flow, and scheduled jobs
+- [Deployment guide](docs/DEPLOYMENT.md) — local, production-style, and HTTPS deployment
+- [User guide](docs/USER_GUIDE.md) — day-to-day workflows for operators and administrators
+- [Operations runbook](docs/OPERATIONS.md) — backups, syncs, alerts, and troubleshooting
+- [Contributing](CONTRIBUTING.md) — development workflow and validation checks
+- [Security policy](SECURITY.md) — vulnerability reporting and deployment safeguards
+- [API reference](API_DOCUMENTATION.html) — token flow and read-only volume endpoints
+
+## Access model
+
+| Role | Access |
+| --- | --- |
+| `admin` | Full application and configuration access |
+| `manual_entry` | Manual volume entry; optional target and employee-detail permissions |
+| `viewer` | Read-only dashboards and reports |
+
+All external API endpoints are read-only and use short-lived Bearer tokens. Web sessions use Flask-Login and an inactivity timeout.
+
+## Architecture at a glance
+
+```text
+Browser / API client
+        │
+        ▼
+Prefix middleware (/r4x8e)
+        │
+        ├── Flask routes ── services ── MySQL
+        │                         ├── Oracle ERP (read-only sync)
+        │                         ├── SMTP (alerts/reports)
+        │                         └── database-backup/ (local SQL exports)
+        └── APScheduler (email, ERP sync, backup checks)
+```
+
+See the [architecture guide](docs/ARCHITECTURE.md) for the detailed request and data flows.
+
 ## Security notes
 
 - Local credentials, logs, database backups, reports, Oracle binaries, and generated analysis are excluded by `.gitignore`.
@@ -118,3 +167,5 @@ Run a syntax check before committing changes:
 ```powershell
 python -m compileall -q app run.py server.py
 ```
+
+Pull requests should also pass `pip check` and keep credentials, exports, database dumps, and generated files out of Git. See [CONTRIBUTING.md](CONTRIBUTING.md).

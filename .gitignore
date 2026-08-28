@@ -1,0 +1,66 @@
+# Environment / secrets — NEVER commit these
+.env
+*.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+Logs/
+
+# Database dumps / backups
+*.sql
+*.dump
+*.zip
+database-backup/
+
+# Local databases, reports, and source data
+*.xlsx
+*.xls
+*.csv
+*.pdf
+*.docx
+previous 12 months data/
+
+# Machine-specific runtimes and generated analysis
+instantclient/
+graphify-out/
+.claude/
+.codex/
+
+# Temporary / dev-only files
+make-this-change-in-the-database.txt
+requirements_text.txt
+compare_names.py
+fix_import.py
+import_historical.py
+
+# Local AI-assistant instructions
+AGENTS.md
+CLAUDE.md

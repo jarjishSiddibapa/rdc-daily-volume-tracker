@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Report — Daily Volume Tracker{% endblock %}
+{% block page_title %}Production Report{% endblock %}
+
+{% block top_actions %}
+<input type="text" class="form-control" id="reportDate" style="width: 170px;" placeholder="Select date" readonly>
+<button class="btn btn-primary btn-sm" onclick="loadReport()">
+    <span class="material-icons-round">refresh</span> Generate
+</button>
+<button class="btn btn-success btn-sm" onclick="exportReport()">
+    <span class="material-icons-round">download</span> Export Excel
+</button>
+{% endblock %}
+
+{% block content %}
+<!-- Summary -->
+<div class="summary-banner" id="reportSummary">
+    Select a date and click Generate to view the report.
+</div>
+
+<!-- Meta Info -->
+<div class="kpi-grid" id="reportKPI" style="display:none;">
+    <div class="kpi-card blue">
+        <span class="kpi-label">MTD Days</span>
+        <span class="kpi-value" id="rptMtdDays">—</span>
+    </div>
+    <div class="kpi-card orange">
+        <span class="kpi-label">Balance Days</span>
+        <span class="kpi-value" id="rptBalDays">—</span>
+    </div>
+    <div class="kpi-card green">
+        <span class="kpi-label">Days in Month</span>
+        <span class="kpi-value" id="rptTotalDays">—</span>
+    </div>
+    <div class="kpi-card purple">
+        <span class="kpi-label">Vol / Plant</span>
+        <span class="kpi-value" id="rptVolPlant">—</span>
+    </div>
+</div>
+
+<!-- Full Report Table -->
+<div class="card">
+    <div class="card-header">
+        <h3>Detailed Report</h3>
+    </div>
+    <div class="table-container">
+        <table class="data-table" id="reportTable">
+            <thead>
+                <tr>
+                    <th>Sr.</th>
+                    <th>Plant Name</th>
+                    <th class="text-center" id="rptThDate">Produced Quantity</th>
+                    <th class="text-center" id="rptThInvDate">Invoice Quantity</th>
+                    <th class="text-right">Daily Avg</th>
+                    <th class="text-right">Req. Vol/day</th>
+                    <th class="text-right">MTD Volume</th>
+                    <th class="text-right">Extrap. Vol</th>
+                    <th class="text-right">Budget/Target</th>
+                    <th class="text-center">% Extrap vs Budget</th>
+                    <th class="text-right">Last Month Vol</th>
+                    <th class="text-center">% vs Last Month</th>
+                    <th class="text-right">Last Year Vol</th>
+                    <th class="text-center">% vs Last Year</th>
+                </tr>
+            </thead>
+            <tbody id="reportBody">
+                <tr>
+                    <td colspan="14" style="text-align:center; padding: 40px; color: var(--text-muted);">
+                        Click "Generate" to load the report
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('reportDate').value = today;
+        loadReport();
+    });
+</script>
+{% endblock %}

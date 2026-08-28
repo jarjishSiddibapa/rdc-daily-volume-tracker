@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Daily Volume Tracker{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block top_actions %}
+<input type="text" class="form-control" id="reportDate" style="width: 170px;" placeholder="Select date" readonly>
+<button class="btn btn-primary btn-sm" onclick="loadDashboard()">
+    <span class="material-icons-round">refresh</span> Refresh
+</button>
+{% if current_user.role in ('admin', 'manual_entry') %}
+<button class="btn btn-success btn-sm" onclick="syncERP()">
+    <span class="material-icons-round">cloud_sync</span> Sync ERP
+</button>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<!-- Summary Banner -->
+<div class="summary-banner" id="summaryBanner">
+    Loading summary...
+</div>
+
+<!-- KPI Cards -->
+<div class="kpi-grid" id="kpiGrid">
+    <div class="kpi-card blue">
+        <span class="kpi-label">Yesterday's Production Volume</span>
+        <span class="kpi-value" id="kpiDaily">—</span>
+        <span class="kpi-sub">CUM</span>
+    </div>
+    <div class="kpi-card teal">
+        <span class="kpi-label">Yesterday's Invoiced Volume</span>
+        <span class="kpi-value" id="kpiInvoiced">—</span>
+        <span class="kpi-sub">CUM</span>
+    </div>
+    <div class="kpi-card green">
+        <span class="kpi-label">MTD Volume</span>
+        <span class="kpi-value" id="kpiMTD">—</span>
+        <span class="kpi-sub">CUM</span>
+    </div>
+    <div class="kpi-card purple">
+        <span class="kpi-label">Extrapolated</span>
+        <span class="kpi-value" id="kpiExtrap">—</span>
+        <span class="kpi-sub">CUM</span>
+    </div>
+    <div class="kpi-card orange">
+        <span class="kpi-label">Target</span>
+        <span class="kpi-value" id="kpiTarget">—</span>
+        <span class="kpi-sub">CUM</span>
+    </div>
+    <div class="kpi-card cyan">
+        <span class="kpi-label">% vs Budget</span>
+        <span class="kpi-value" id="kpiBudget">—</span>
+        <span class="kpi-sub" id="kpiBudgetSub"></span>
+    </div>
+    <div class="kpi-card red">
+        <span class="kpi-label">Active Plants</span>
+        <span class="kpi-value" id="kpiPlants">—</span>
+        <span class="kpi-sub" id="kpiVolPlant"></span>
+    </div>
+</div>
+
+<!-- Report Table -->
+<div class="card">
+    <div class="card-header">
+        <h3>Area Volume Summary</h3>
+        <button class="btn btn-outline btn-sm" onclick="exportReport()">
+            <span class="material-icons-round">download</span> Export Excel
+        </button>
+    </div>
+    <div class="table-container">
+        <table class="data-table" id="dashboardTable">
+            <thead>
+                <tr>
+                    <th>Sr.</th>
+                    <th>Plant Name</th>
+                    <th class="text-center" id="thDate">Produced Quantity</th>
+                    <th class="text-center" id="thInvDate">Invoice Quantity</th>
+                    <th class="text-right">Daily Avg</th>
+                    <th class="text-right">Req. Vol/day</th>
+                    <th class="text-right">MTD Volume</th>
+                    <th class="text-right">Extrap. Vol</th>
+                    <th class="text-right">Target</th>
+                    <th class="text-center">% vs Budget</th>
+                    <th class="text-right">Last Month</th>
+                    <th class="text-center">% vs LM</th>
+                    <th class="text-right">Last Year</th>
+                    <th class="text-center">% vs LY</th>
+                </tr>
+            </thead>
+            <tbody id="dashboardBody">
+                <tr>
+                    <td colspan="14" class="loading">
+                        <div class="spinner"></div><span>Loading data...</span>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('reportDate').value = today;
+        loadDashboard();
+    });
+
+    // ── Color coding for % columns ───────────────────────────────────────
+    // Runs after loadDashboard() populates the table.
+    // Uses MutationObserver so it fires whenever the tbody is re-rendered.
+
+    function _pctVal(text) {
+        return parseInt((text || '0').replace('%', '').replace(',', '').trim()) || 0;
+    }
+
+    function _budgetClass(val) {
+        if (val < 90) return 'pct-bad';
+        if (val <= 100) return 'pct-warn';
+        return 'pct-good';
+    }
+
+    function _variationClass(val) {
+        if (val < 0) return 'pct-bad';
+        if (val <= 10) return 'pct-warn';
+        return 'pct-good';
+    }
+
+    function applyPctColors() {
+        const tbody = document.getElementById('dashboardBody');
+        if (!tbody) return;
+
+        tbody.querySelectorAll('tr').forEach(row => {
+            const cells = row.querySelectorAll('td');
+            if (cells.length < 14) return; // skip loading/empty rows
+
+            // Col index (0-based): 9 = % vs Budget, 11 = % vs LM, 13 = % vs LY
+            const budgetCell = cells[9];
+            const lmCell = cells[11];
+            const lyCell = cells[13];
+
+            [budgetCell, lmCell, lyCell].forEach(c => {
+                c.classList.remove('pct-good', 'pct-warn', 'pct-bad');
+            });
+
+            budgetCell.classList.add(_budgetClass(_pctVal(budgetCell.textContent)));
+            lmCell.classList.add(_variationClass(_pctVal(lmCell.textContent)));
+            lyCell.classList.add(_variationClass(_pctVal(lyCell.textContent)));
+
+            // Region rows: add colour class for left-border accent
+            if (row.classList.contains('region-row')) {
+                row.classList.remove('region-good', 'region-warn', 'region-bad');
+                const cls = _budgetClass(_pctVal(budgetCell.textContent))
+                    .replace('pct-', 'region-');
+                row.classList.add(cls);
+            }
+        });
+    }
+
+    // Observe tbody for any DOM changes (initial load + date refresh)
+    const _observer = new MutationObserver(applyPctColors);
+    const _waitForTbody = setInterval(() => {
+        const tbody = document.getElementById('dashboardBody');
+        if (tbody) {
+            _observer.observe(tbody, { childList: true, subtree: true });
+            clearInterval(_waitForTbody);
+        }
+    }, 100);
+</script>
+{% endblock %}

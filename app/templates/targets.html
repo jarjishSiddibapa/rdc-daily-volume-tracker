@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Targets — Daily Volume Tracker{% endblock %}
+{% block page_title %}Monthly Targets{% endblock %}
+
+{% block top_actions %}
+<input type="text" class="form-control" id="targetMonth" style="width: 170px;" placeholder="Select month" readonly>
+<button class="btn btn-primary btn-sm" onclick="loadTargets()">
+    <span class="material-icons-round">refresh</span> Load
+</button>
+{% if current_user.role == 'admin' or (current_user.role == 'manual_entry' and current_user.can_update_targets) %}
+<button class="btn btn-success btn-sm" onclick="saveAllTargets()">
+    <span class="material-icons-round">save</span> Save All
+</button>
+{% endif %}
+<button class="btn btn-outline btn-sm" onclick="downloadTemplate()">
+    <span class="material-icons-round">download</span> Download Template
+</button>
+{% endblock %}
+
+{% block content %}
+{% if current_user.role == 'admin' or (current_user.role == 'manual_entry' and current_user.can_update_targets) %}
+<!-- Upload Section -->
+<div class="card mb-24">
+    <div class="card-header">
+        <h3>Upload Targets from Excel</h3>
+    </div>
+    <p class="text-sm text-muted mb-16">
+        Upload an Excel file with columns: <strong>plant_code</strong> and <strong>target_volume</strong>.
+        Select the target month first.
+    </p>
+    <div class="upload-area" id="uploadArea" onclick="document.getElementById('targetFile').click()">
+        <span class="material-icons-round">cloud_upload</span>
+        <p>Click to upload Excel file</p>
+        <p class="hint">.xlsx or .xls files supported</p>
+        <input type="file" id="targetFile" accept=".xlsx,.xls" style="display:none" onchange="uploadTargets()">
+    </div>
+    <div id="uploadResult" class="mt-16 hidden"></div>
+</div>
+{% endif %}
+
+<!-- Inline Edit Section -->
+<div class="card">
+    <div class="card-header">
+        <h3>Target Values</h3>
+        <span class="text-sm text-muted" id="targetInfo"></span>
+    </div>
+    <!-- Prominent month banner — shown after targets load -->
+    <div id="activeMonthBanner" style="display:none; align-items:center; gap:12px; padding:14px 20px; border-bottom:1px solid var(--border);">
+        <span class="material-icons-round" id="activeMonthIcon" style="font-size:22px;">calendar_month</span>
+        <div>
+            <div style="font-size:0.72rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; opacity:0.7;" id="activeMonthSublabel">Editing targets for</div>
+            <div style="font-size:1.25rem; font-weight:800; letter-spacing:0.01em;" id="activeMonthLabel"></div>
+        </div>
+        <span id="activeMonthTag" style="display:none; margin-left:4px; font-size:0.72rem; font-weight:700; padding:3px 10px; border-radius:20px; letter-spacing:0.06em; text-transform:uppercase;"></span>
+    </div>
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Plant Code</th>
+                    <th>Plant Name</th>
+                    <th>Area</th>
+                    <th class="text-right">Target Volume (CUM)</th>
+                </tr>
+            </thead>
+            <tbody id="targetsBody">
+                <tr>
+                    <td colspan="4" class="loading">
+                        <div class="spinner"></div><span>Select a month and click Load...</span>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const now = new Date();
+        const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        document.getElementById('targetMonth').value = month;
+        loadTargets();
+    });
+</script>
+{% endblock %}

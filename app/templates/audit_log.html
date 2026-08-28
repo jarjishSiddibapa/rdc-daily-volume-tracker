@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Audit Log — Daily Volume Tracker{% endblock %}
+{% block page_title %}Audit Log{% endblock %}
+
+{% block top_actions %}
+<select class="form-control" id="auditAction" style="width: 170px;" onchange="loadAuditLog()">
+    <option value="">All Actions</option>
+    <option value="manual_entry">Manual Entry</option>
+    <option value="target_update">Target Update</option>
+    <option value="target_upload">Target Upload</option>
+    <option value="user_create">User Create</option>
+    <option value="user_update">User Update</option>
+    <option value="user_delete">User Delete</option>
+    <option value="plant_create">Plant Create</option>
+    <option value="plant_update">Plant Update</option>
+    <option value="plant_delete">Plant Delete</option>
+    <option value="erp_sync">ERP Sync</option>
+</select>
+<input type="text" class="form-control" id="auditUsername" style="width: 150px;" placeholder="Filter by user"
+    onkeyup="debounceAuditFilter()">
+<button class="btn btn-primary btn-sm" onclick="loadAuditLog()">
+    <span class="material-icons-round">refresh</span> Refresh
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3>Activity Log</h3>
+        <span class="text-sm text-muted" id="auditInfo"></span>
+    </div>
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th style="width: 160px;">Timestamp</th>
+                    <th style="width: 120px;">User</th>
+                    <th style="width: 130px;">Action</th>
+                    <th>Details</th>
+                    <th style="width: 120px;">IP Address</th>
+                </tr>
+            </thead>
+            <tbody id="auditBody">
+                <tr>
+                    <td colspan="5" class="loading">
+                        <div class="spinner"></div><span>Loading audit log...</span>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Pagination -->
+<div id="auditPagination"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let auditPage = 1;
+    let debounceTimer = null;
+
+    function debounceAuditFilter() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => loadAuditLog(), 400);
+    }
+
+    async function loadAuditLog(page = 1) {
+        auditPage = page;
+        const action = document.getElementById('auditAction').value;
+        const username = document.getElementById('auditUsername').value.trim();
+        const body = document.getElementById('auditBody');
+        body.innerHTML = '<tr><td colspan="5" class="loading"><div class="spinner"></div><span>Loading...</span></td></tr>';
+
+        try {
+            let url = `/api/audit-log?page=${page}&per_page=50`;
+            if (action) url += `&action=${encodeURIComponent(action)}`;
+            if (username) url += `&username=${encodeURIComponent(username)}`;
+
+            const data = await apiCall(url);
+            const logs = data.logs;
+
+            document.getElementById('auditInfo').textContent =
+                `${data.total} entries — Page ${data.page} of ${data.pages}`;
+
+            if (logs.length === 0) {
+                body.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-muted)">No audit entries found</td></tr>';
+                document.getElementById('auditPagination').innerHTML = '';
+                return;
+            }
+
+            const actionBadges = {
+                'manual_entry': 'badge-blue',
+                'target_update': 'badge-green',
+                'target_upload': 'badge-green',
+                'erp_sync': 'badge-purple',
+                'user_create': 'badge-orange',
+                'user_update': 'badge-orange',
+                'user_delete': 'badge-red',
+                'plant_create': 'badge-cyan',
+                'plant_update': 'badge-cyan',
+                'plant_delete': 'badge-red',
+            };
+
+            let html = '';
+            for (const log of logs) {
+                const ts = log.created_at ? new Date(log.created_at).toLocaleString() : '—';
+                const badge = actionBadges[log.action] || 'badge-blue';
+                const actionLabel = log.action.replace(/_/g, ' ');
+                let details = '—';
+                if (log.details) {
+                    try {
+                        const d = JSON.parse(log.details);
+                        details = Object.entries(d).map(([k, v]) =>
+                            `<span class="text-muted">${escHtml(k)}:</span> ${escHtml(String(v))}`
+                        ).join(' · ');
+                    } catch {
+                        details = escHtml(log.details);
+                    }
+                }
+
+                html += `<tr>
+                    <td class="text-sm">${ts}</td>
+                    <td><strong>${escHtml(log.username)}</strong></td>
+                    <td><span class="badge ${badge}">${actionLabel}</span></td>
+                    <td class="text-sm">${details}</td>
+                    <td class="text-sm text-muted">${escHtml(log.ip_address || '—')}</td>
+                </tr>`;
+            }
+            body.innerHTML = html;
+
+            // Premium pagination
+            DVTPaginator.renderExternal('auditPagination', data.page, data.total, data.pages, 'loadAuditLog');
+
+        } catch (err) {
+            body.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--accent-red)">Failed to load audit log</td></tr>';
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadAuditLog();
+    });
+</script>
+{% endblock %}

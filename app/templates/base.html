@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<script>
+    // Apply saved theme immediately to prevent flash
+    (function () {
+        var saved = localStorage.getItem('dvt-theme');
+        if (saved) document.documentElement.setAttribute('data-theme', saved);
+    })();
+</script>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Daily Volume Tracker{% endblock %}</title>
+    <meta name="description" content="Daily production volume tracker for all plants across regions">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" id="fpThemeLink" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/light.css">
+    <script>
+        // Switch flatpickr theme immediately if dark mode is saved, before the
+        // rest of the page loads — prevents the calendar flashing the wrong theme.
+        (function () {
+            if (localStorage.getItem('dvt-theme') === 'dark') {
+                document.getElementById('fpThemeLink').href =
+                    'https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css';
+            }
+        })();
+    </script>
+</head>
+
+<body>
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <span class="material-icons-round logo-icon">analytics</span>
+                <div class="logo-text">
+                    <h1>RDC DVT</h1>
+                    <span>Daily Volume Tracker</span>
+                </div>
+            </div>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="{{ url_for('dashboard.index') }}" class="nav-item {% if request.path == '/' %}active{% endif %}" id="nav-dashboard">
+                <span class="material-icons-round">dashboard</span>
+                <span>Dashboard</span>
+            </a>
+            {% if current_user.role in ('admin', 'manual_entry') %}
+            <a href="{{ url_for('daily_volume.manual_entry_page') }}" class="nav-item {% if request.path == '/manual-entry' %}active{% endif %}"
+                id="nav-manual">
+                <span class="material-icons-round">edit_note</span>
+                <span>Manual Entry</span>
+            </a>
+            {% endif %}
+            <a href="{{ url_for('targets.targets_page') }}" class="nav-item {% if request.path == '/targets' %}active{% endif %}" id="nav-targets">
+                <span class="material-icons-round">track_changes</span>
+                <span>Targets</span>
+            </a>
+            {% if current_user.role == 'admin' %}
+            <a href="{{ url_for('regions.regions_page') }}" class="nav-item {% if request.path == '/regions' %}active{% endif %}" id="nav-regions">
+                <span class="material-icons-round">map</span>
+                <span>Areas</span>
+            </a>
+            <a href="{{ url_for('plants.plants_page') }}" class="nav-item {% if request.path == '/plants' %}active{% endif %}" id="nav-plants">
+                <span class="material-icons-round">factory</span>
+                <span>Plants</span>
+            </a>
+            {% endif %}
+            <a href="{{ url_for('dashboard.report_page') }}" class="nav-item {% if request.path == '/report' %}active{% endif %}" id="nav-report">
+                <span class="material-icons-round">assessment</span>
+                <span>Report</span>
+            </a>
+            {% if current_user.role == 'admin' %}
+            <a href="{{ url_for('analytics.analytics_page') }}" class="nav-item {% if request.path == '/analytics' %}active{% endif %}" id="nav-analytics">
+                <span class="material-icons-round">bar_chart</span>
+                <span>Analytics</span>
+            </a>
+            {% endif %}
+            {% if current_user.role == 'admin' or current_user.can_edit_employee_details %}
+            <a href="{{ url_for('employee.employee_details_page') }}" class="nav-item {% if request.path == '/employee-details' %}active{% endif %}" id="nav-emp">
+                <span class="material-icons-round">badge</span>
+                <span>Employee & TM</span>
+            </a>
+            {% endif %}
+            {% if current_user.role == 'admin' %}
+            <a href="{{ url_for('users.users_page') }}" class="nav-item {% if request.path == '/users' %}active{% endif %}" id="nav-users">
+                <span class="material-icons-round">group</span>
+                <span>Users</span>
+            </a>
+            <a href="{{ url_for('audit.audit_page') }}" class="nav-item {% if request.path == '/audit-log' %}active{% endif %}" id="nav-audit">
+                <span class="material-icons-round">history</span>
+                <span>Audit Log</span>
+            </a>
+            <a href="{{ url_for('email.zero_volume_alert_page') }}" class="nav-item {% if request.path == '/zero-volume-alert' %}active{% endif %}" id="nav-zv">
+                <span class="material-icons-round">warning_amber</span>
+                <span>Zero Vol Alert</span>
+            </a>
+            <a href="{{ url_for('email.daily_report_email_page') }}" class="nav-item {% if request.path == '/daily-report-email' %}active{% endif %}" id="nav-rpt">
+                <span class="material-icons-round">summarize</span>
+                <span>Daily Report</span>
+            </a>
+            <a href="{{ url_for('backup.backup_page') }}" class="nav-item {% if request.path == '/database-backup' %}active{% endif %}" id="nav-backup">
+                <span class="material-icons-round">backup</span>
+                <span>DB Backup</span>
+            </a>
+            {% endif %}
+        </nav>
+        <div class="sidebar-footer">
+            <div class="sync-status" id="syncStatus">
+                <span class="material-icons-round">cloud_sync</span>
+                <span>ERP Sync</span>
+            </div>
+            <div class="user-info" style="padding: 10px 16px; border-top: 1px solid var(--border); margin-top: 4px;">
+                <div class="flex items-center justify-between">
+                    <div style="min-width: 0;">
+                        <div
+                            style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            {{ current_user.display_name }}
+                        </div>
+                        <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: capitalize;">
+                            {{ current_user.role | replace('_', ' ') }}
+                        </div>
+                    </div>
+                    <a href="{{ url_for('auth.logout') }}" class="btn btn-outline btn-sm btn-icon" title="Logout" style="flex-shrink: 0;">
+                        <span class="material-icons-round">logout</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <header class="top-bar">
+            <button class="menu-toggle" id="menuToggle" aria-label="Toggle sidebar">
+                <span class="material-icons-round">menu</span>
+            </button>
+            <div class="top-bar-title">
+                <h2>{% block page_title %}Dashboard{% endblock %}</h2>
+            </div>
+            <div class="top-bar-actions">
+                {% block top_actions %}{% endblock %}
+                <button class="theme-toggle" id="themeToggle" title="Toggle light/dark mode">
+                    <span class="material-icons-round" id="themeIcon">light_mode</span>
+                </button>
+            </div>
+        </header>
+
+        <div class="content-wrapper">
+            {% block content %}{% endblock %}
+        </div>
+        <footer style="text-align:center;padding:12px 16px;font-size:0.75rem;color:var(--text-muted);border-top:1px solid var(--border);">
+            made with ❤ by Jarjish | Powered by RDC IT Team
+        </footer>
+    </main>
+
+    <!-- Sidebar backdrop (mobile) — closeSidebar() is defined in app.js -->
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+    <!-- Toast notifications -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Premium confirm dialog (replaces browser confirm()) -->
+    <div class="confirm-overlay" id="confirmOverlay" onclick="_confirmOverlayClick(event)">
+        <div class="confirm-box" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+            <div class="confirm-icon"><span class="material-icons-round">warning_amber</span></div>
+            <h4 id="confirmTitle">Confirm Action</h4>
+            <p id="confirmMessage">Are you sure you want to proceed?</p>
+            <div class="confirm-actions">
+                <button class="btn btn-outline btn-sm" id="confirmCancelBtn" onclick="window._dvtConfirmResolve&&window._dvtConfirmResolve(false)">Cancel</button>
+                <button class="btn btn-sm" id="confirmOkBtn" onclick="window._dvtConfirmResolve&&window._dvtConfirmResolve(true)" style="background:var(--accent-red);border-color:var(--accent-red);color:#fff;">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pass config to JS -->
+    <script>
+        window.CURRENT_USER_ROLE = "{{ current_user.role }}";
+        window.CURRENT_USER_CAN_UPDATE_TARGETS = {{ 'true' if current_user.is_authenticated and (current_user.role == 'admin' or current_user.can_update_targets) else 'false' }};
+        window.URL_PREFIX = "{{ request.script_root }}";
+
+        // ── Auto-logout: inactivity + tab/browser close ──────────────
+        (function() {
+            var P = window.URL_PREFIX || '';
+            let inactivityTimer;
+            const TIMEOUT = 10 * 60 * 1000; // 10 minutes
+
+            function resetTimer() {
+                clearTimeout(inactivityTimer);
+                inactivityTimer = setTimeout(function() {
+                    window.location.href = P + '/logout';
+                }, TIMEOUT);
+            }
+
+            ['mousedown', 'keydown', 'scroll', 'touchstart'].forEach(function(evt) {
+                document.addEventListener(evt, resetTimer, { passive: true });
+            });
+            resetTimer();
+
+            // Tab-close logout is handled by app.js (more robust implementation)
+        })();
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/plugins/monthSelect/index.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/plugins/monthSelect/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/lenis@1/dist/lenis.min.js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+
+</html>

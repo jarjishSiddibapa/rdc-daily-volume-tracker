@@ -1,0 +1,363 @@
+{% extends "base.html" %}
+{% block title %}Employee & TM Details — Daily Volume Tracker{% endblock %}
+{% block page_title %}Employee & TM Details{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3>Plant-wise Employee Details</h3>
+        <span class="text-sm text-muted" id="empPlantCount"></span>
+        <div style="display:none;gap:8px;margin-left:auto;" id="bulkActionsBar">
+            <button class="btn btn-outline btn-sm" id="btnDownloadTemplate" onclick="downloadEmpTemplate()">
+                <span class="material-icons-round" style="font-size:16px;">download</span> Download Excel
+            </button>
+            <label class="btn btn-outline btn-sm" style="cursor:pointer;margin:0;" id="btnUploadLabel">
+                <span class="material-icons-round" style="font-size:16px;">upload</span> Upload & Update
+                <input type="file" id="empBulkFile" accept=".xlsx,.xlsm" style="display:none;" onchange="uploadEmpBulk(this)">
+            </label>
+        </div>
+    </div>
+    <div class="table-container">
+        <table class="data-table" id="empTable">
+            <thead>
+                <tr>
+                    <th style="width:48px;text-align:center;">Sr.</th>
+                    <th>Plant Name</th>
+                    <th>Area</th>
+                    <th style="text-align:center;">Onroll<br>Employees</th>
+                    <th style="text-align:center;">Teamlease<br>Employees</th>
+                    <th style="text-align:center;font-weight:700;">Total<br>Employees</th>
+                    <th style="text-align:center;">No. of TMs</th>
+                    <th style="text-align:center;">Last Updated</th>
+                    <th style="text-align:center;display:none;" id="actionsHeader">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="empBody">
+                <tr>
+                    <td colspan="9" class="loading">
+                        <div class="spinner"></div><span>Loading...</span>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal-overlay" id="empModal">
+    <div class="modal" style="max-width:460px;">
+        <div class="modal-header">
+            <h3>Edit Employee Details</h3>
+            <button class="modal-close" onclick="closeEmpModal()">
+                <span class="material-icons-round">close</span>
+            </button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="empPlantCode">
+            <p style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:16px;" id="empPlantLabel"></p>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Onroll Employees</label>
+                    <input type="number" class="form-control" id="empOnRoll" min="0" placeholder="0">
+                </div>
+                <div class="form-group">
+                    <label>Teamlease Employees</label>
+                    <input type="number" class="form-control" id="empTeamlease" min="0" placeholder="0">
+                </div>
+            </div>
+            <div class="form-group" style="max-width:200px;">
+                <label>No. of TMs</label>
+                <input type="number" class="form-control" id="empNoOfTm" min="0" placeholder="0">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeEmpModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveEmpDetails()">
+                <span class="material-icons-round">save</span> Save
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Report Modal -->
+<div class="modal-overlay" id="uploadReportModal">
+    <div class="modal" style="max-width:480px;">
+        <div class="modal-header">
+            <h3>Upload Summary</h3>
+            <button class="modal-close" onclick="document.getElementById('uploadReportModal').classList.remove('show')">
+                <span class="material-icons-round">close</span>
+            </button>
+        </div>
+        <div class="modal-body" id="uploadReportBody"></div>
+        <div class="modal-footer">
+            <button class="btn btn-primary" onclick="document.getElementById('uploadReportModal').classList.remove('show')">OK</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.area-row td {
+    background: var(--bg-card);
+    border-top: 2px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    font-weight: 700;
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding: 6px 10px;
+}
+.emp-total-col {
+    font-weight: 700;
+    color: var(--accent-blue);
+}
+
+/* Total row — scoped to #empTable to beat the global .data-table specificity */
+#empTable tr.total-row {
+    background: var(--accent-blue) !important;
+}
+#empTable tr.total-row td {
+    background: var(--accent-blue) !important;
+    color: #fff !important;
+    font-weight: 700;
+    font-size: 0.95rem;
+    border-top: 2px solid rgba(255,255,255,0.15) !important;
+    border-bottom: none !important;
+    padding: 11px 10px;
+}
+#empTable tr.total-row td.emp-total-col {
+    color: #fff !important;
+    font-size: 1.05rem;
+    letter-spacing: 0.02em;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let _canEdit = false;
+
+document.addEventListener('DOMContentLoaded', loadEmpDetails);
+
+function downloadEmpTemplate() {
+    const btn = document.getElementById('btnDownloadTemplate');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="material-icons-round" style="font-size:16px;">hourglass_empty</span> Preparing…';
+    window.location.href = '{{ url_for("employee.api_download_employee_template") }}';
+    setTimeout(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-icons-round" style="font-size:16px;">download</span> Download Excel';
+    }, 3000);
+}
+
+async function uploadEmpBulk(input) {
+    if (!input.files || !input.files[0]) return;
+    const file = input.files[0];
+    input.value = '';   // allow re-upload of same file
+
+    const label = document.getElementById('btnUploadLabel');
+    label.style.opacity = '0.6';
+    label.style.pointerEvents = 'none';
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const resp = await fetch('{{ url_for("employee.api_upload_employee_details") }}', {
+            method: 'POST',
+            body: formData,
+        });
+        const data = await resp.json();
+
+        if (!resp.ok) {
+            showToast(data.error || 'Upload failed', 'error');
+            return;
+        }
+
+        // Build a detailed result message
+        let msg = data.message || `${data.updated} plant(s) updated.`;
+        showToast(msg, data.errors && data.errors.length ? 'warning' : 'success');
+
+        // If there were skipped / errored rows, show a summary modal
+        if ((data.skipped && data.skipped.length) || (data.errors && data.errors.length)) {
+            _showUploadReport(data);
+        }
+
+        loadEmpDetails();   // refresh table
+    } catch (err) {
+        showToast('Upload failed — network error', 'error');
+    } finally {
+        label.style.opacity = '';
+        label.style.pointerEvents = '';
+    }
+}
+
+function _showUploadReport(data) {
+    let html = `<div style="font-size:0.875rem;">`;
+
+    if (data.updated) {
+        html += `<p style="color:var(--accent-green);font-weight:600;margin-bottom:8px;">
+                    <span class="material-icons-round" style="font-size:16px;vertical-align:middle;">check_circle</span>
+                    ${data.updated} plant(s) updated successfully.
+                 </p>`;
+    }
+
+    if (data.skipped && data.skipped.length) {
+        html += `<p style="font-weight:600;margin-bottom:4px;color:var(--text-muted);">Skipped (${data.skipped.length}):</p>
+                 <ul style="margin:0 0 10px;padding-left:18px;">`;
+        for (const s of data.skipped) {
+            html += `<li><strong>${escHtml(s.plant_code)}</strong> — ${escHtml(s.reason)}</li>`;
+        }
+        html += `</ul>`;
+    }
+
+    if (data.errors && data.errors.length) {
+        html += `<p style="font-weight:600;margin-bottom:4px;color:var(--accent-red);">Errors (${data.errors.length}):</p>
+                 <ul style="margin:0;padding-left:18px;">`;
+        for (const e of data.errors) {
+            html += `<li><strong>${escHtml(e.plant_code)}</strong> — ${escHtml(e.reason)}</li>`;
+        }
+        html += `</ul>`;
+    }
+
+    html += `</div>`;
+
+    document.getElementById('uploadReportBody').innerHTML = html;
+    document.getElementById('uploadReportModal').classList.add('show');
+}
+
+async function loadEmpDetails() {
+    const body = document.getElementById('empBody');
+    try {
+        const data = await apiCall('/api/employee-details');
+        _canEdit = data.can_edit;
+
+        if (_canEdit) {
+            document.getElementById('actionsHeader').style.display = '';
+            document.getElementById('bulkActionsBar').style.display = 'flex';
+        }
+
+        const plants = data.plants;
+        document.getElementById('empPlantCount').textContent = `${plants.length} active plants`;
+
+        if (!plants.length) {
+            body.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text-muted);">No active plants found.</td></tr>';
+            return;
+        }
+
+        // Group by area
+        const areaMap = {};
+        for (const p of plants) {
+            const area = p.region || 'Unassigned';
+            if (!areaMap[area]) areaMap[area] = [];
+            areaMap[area].push(p);
+        }
+
+        let html = '';
+        let sr = 1;
+        let grandOnRoll = 0, grandTeamlease = 0, grandTm = 0;
+
+        for (const [area, areaPlants] of Object.entries(areaMap)) {
+            // Area header row
+            const colspan = _canEdit ? 9 : 8;
+            html += `<tr class="area-row">
+                <td colspan="${colspan}">${escHtml(area)}</td>
+            </tr>`;
+
+            let areaOnRoll = 0, areaTeamlease = 0, areaTm = 0;
+
+            for (const p of areaPlants) {
+                const total = p.on_roll + p.teamlease;
+                areaOnRoll   += p.on_roll;
+                areaTeamlease+= p.teamlease;
+                areaTm       += p.no_of_tm;
+
+                const updatedInfo = p.updated_at
+                    ? `<span style="font-size:11px;">${escHtml(p.updated_at)}</span><br><span style="font-size:10px;color:var(--text-muted);">by ${escHtml(p.updated_by)}</span>`
+                    : '<span style="color:var(--text-muted);font-size:12px;">—</span>';
+
+                const actionsCell = _canEdit
+                    ? `<td style="text-align:center;">
+                           <button class="btn btn-outline btn-xs" onclick="openEmpModal('${escHtml(p.plant_code)}','${escHtml(p.plant_name)}',${p.on_roll},${p.teamlease},${p.no_of_tm})">
+                               <span class="material-icons-round" style="font-size:15px;">edit</span>
+                           </button>
+                       </td>`
+                    : '';
+
+                html += `<tr>
+                    <td style="text-align:center;">${sr++}</td>
+                    <td><strong>${escHtml(p.plant_name)}</strong></td>
+                    <td style="color:var(--text-muted);font-size:0.85rem;">${escHtml(area)}</td>
+                    <td style="text-align:center;">${p.on_roll}</td>
+                    <td style="text-align:center;">${p.teamlease}</td>
+                    <td style="text-align:center;" class="emp-total-col">${total}</td>
+                    <td style="text-align:center;">${p.no_of_tm}</td>
+                    <td style="text-align:center;">${updatedInfo}</td>
+                    ${actionsCell}
+                </tr>`;
+            }
+
+            grandOnRoll   += areaOnRoll;
+            grandTeamlease+= areaTeamlease;
+            grandTm       += areaTm;
+        }
+
+        // Grand total row
+        const totalColspan = _canEdit ? '' : '';
+        html += `<tr class="total-row">
+            <td style="text-align:center;">—</td>
+            <td colspan="2">COMPANY TOTAL</td>
+            <td style="text-align:center;">${grandOnRoll}</td>
+            <td style="text-align:center;">${grandTeamlease}</td>
+            <td style="text-align:center;" class="emp-total-col">${grandOnRoll + grandTeamlease}</td>
+            <td style="text-align:center;">${grandTm}</td>
+            <td style="text-align:center;">—</td>
+            ${_canEdit ? '<td></td>' : ''}
+        </tr>`;
+
+        body.innerHTML = html;
+    } catch (err) {
+        body.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--accent-red);">Failed to load data</td></tr>';
+    }
+}
+
+function openEmpModal(plantCode, plantName, onRoll, teamlease, noOfTm) {
+    document.getElementById('empPlantCode').value = plantCode;
+    document.getElementById('empPlantLabel').textContent = plantName;
+    document.getElementById('empOnRoll').value = onRoll;
+    document.getElementById('empTeamlease').value = teamlease;
+    document.getElementById('empNoOfTm').value = noOfTm;
+    document.getElementById('empModal').classList.add('show');
+    document.getElementById('empOnRoll').focus();
+}
+
+function closeEmpModal() {
+    document.getElementById('empModal').classList.remove('show');
+}
+
+async function saveEmpDetails() {
+    const plantCode = document.getElementById('empPlantCode').value;
+    const onRoll    = parseInt(document.getElementById('empOnRoll').value)    || 0;
+    const teamlease = parseInt(document.getElementById('empTeamlease').value) || 0;
+    const noOfTm    = parseInt(document.getElementById('empNoOfTm').value)    || 0;
+
+    if (onRoll < 0 || teamlease < 0 || noOfTm < 0) {
+        showToast('Values cannot be negative', 'warning');
+        return;
+    }
+
+    try {
+        await apiCall(`/api/employee-details/${encodeURIComponent(plantCode)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ on_roll: onRoll, teamlease, no_of_tm: noOfTm }),
+        });
+        showToast('Details saved', 'success');
+        closeEmpModal();
+        loadEmpDetails();
+    } catch {
+        showToast('Failed to save', 'error');
+    }
+}
+</script>
+{% endblock %}

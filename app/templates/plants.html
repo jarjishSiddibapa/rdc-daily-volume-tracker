@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Plants — Daily Volume Tracker{% endblock %}
+{% block page_title %}Plant Management{% endblock %}
+
+{% block top_actions %}
+<div class="table-search-wrap">
+    <span class="material-icons-round">search</span>
+    <input type="text" class="form-control" id="plantSearch" style="width:180px;" placeholder="Search plants…"
+        oninput="_applyPlantsFilter()">
+</div>
+<select class="form-control" id="regionFilter" style="width: 180px;" onchange="_applyPlantsFilter()">
+    <option value="">All Areas</option>
+</select>
+<button class="btn btn-outline btn-sm" onclick="downloadPlants()">
+    <span class="material-icons-round">download</span> Excel
+</button>
+<button class="btn btn-outline btn-sm" onclick="showPlantReorderModal()">
+    <span class="material-icons-round">swap_vert</span> Reorder
+</button>
+<button class="btn btn-primary btn-sm" onclick="showAddPlantModal()">
+    <span class="material-icons-round">add</span> Add Plant
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3>All Plants</h3>
+        <span class="text-sm text-muted" id="plantCount"></span>
+    </div>
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Code</th>
+                    <th>Tracker Name</th>
+                    <th>ERP Name</th>
+                    <th>Area</th>
+                    <th class="text-center">Active</th>
+                    <th class="text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="plantsBody">
+                <tr>
+                    <td colspan="6" class="loading">
+                        <div class="spinner"></div><span>Loading plants...</span>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div id="plantsPagination" style="padding:0 4px;"></div>
+</div>
+
+<!-- Plant Reorder Modal -->
+<div class="modal-overlay" id="plantReorderModal">
+    <div class="modal" style="max-width:500px;">
+        <div class="modal-header">
+            <div>
+                <h3>Reorder Plants</h3>
+                <div class="text-sm text-muted" id="reorderSubtitle" style="margin-top:2px;">Select an area to start</div>
+            </div>
+            <button class="modal-close" onclick="closePlantReorderModal()">
+                <span class="material-icons-round">close</span>
+            </button>
+        </div>
+        <div class="modal-body" style="padding-bottom:8px;">
+            <div class="form-group" style="margin-bottom:16px;">
+                <label>Area</label>
+                <select class="form-control" id="reorderRegionSel" onchange="loadReorderList()">
+                    <option value="">— pick an area —</option>
+                </select>
+            </div>
+            <div id="reorderList" style="min-height:40px;"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closePlantReorderModal()">Cancel</button>
+            <button class="btn btn-primary" id="saveReorderBtn" onclick="saveReorderPlants()" disabled>
+                <span class="material-icons-round">check</span> Save Order
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Plant Modal -->
+<div class="modal-overlay" id="plantModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 id="plantModalTitle">Add Plant</h3>
+            <button class="modal-close" onclick="closePlantModal()">
+                <span class="material-icons-round">close</span>
+            </button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="editingPlantCode">
+            <div class="form-group">
+                <label>Plant Code *</label>
+                <input type="text" class="form-control" id="modalPlantCode" placeholder="e.g., BG1">
+            </div>
+            <div class="form-group">
+                <label>Tracker Name</label>
+                <input type="text" class="form-control" id="modalTrackerName" placeholder="e.g., BG-Mysore Road">
+            </div>
+            <div class="form-group">
+                <label>ERP Name</label>
+                <input type="text" class="form-control" id="modalErpName" placeholder="e.g., Banglore-2 RMC Plant">
+            </div>
+            <div class="form-group">
+                <label>Area</label>
+                <select class="form-control" id="modalRegion">
+                    <option value="">(No Area)</option>
+                </select>
+            </div>
+            <div class="form-group" style="flex: 0; min-width: auto;">
+                <label>Active</label>
+                <label class="toggle">
+                    <input type="checkbox" id="modalActive" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closePlantModal()">Cancel</button>
+            <button class="btn btn-primary" id="savePlantBtn" onclick="savePlant()">Save</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', loadPlants);
+
+    function downloadPlants() {
+        window.location.href = (window.URL_PREFIX || '') + '/api/plants/download';
+    }
+</script>
+{% endblock %}

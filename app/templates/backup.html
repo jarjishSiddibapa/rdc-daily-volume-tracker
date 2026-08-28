@@ -1,0 +1,389 @@
+{% extends "base.html" %}
+{% block title %}DB Backup — Daily Volume Tracker{% endblock %}
+{% block page_title %}Database Backup{% endblock %}
+
+{% block top_actions %}
+<button class="btn btn-primary btn-sm" onclick="runBackupNow()" id="runNowBtn">
+    <span class="material-icons-round">backup</span> Take Backup Now
+</button>
+{% endblock %}
+
+{% block content %}
+<style>
+/* ── toggle switch ──────────────────────────────── */
+.toggle-switch {
+    width:44px; height:24px; background:var(--border);
+    border-radius:12px; position:relative; cursor:pointer; transition:background 0.2s;
+}
+.toggle-switch.on { background:var(--accent-green); }
+.toggle-knob {
+    width:18px; height:18px; background:#fff; border-radius:50%;
+    position:absolute; top:3px; left:3px; transition:transform 0.2s;
+    box-shadow:0 1px 4px rgba(0,0,0,0.2);
+}
+.toggle-switch.on .toggle-knob { transform:translateX(20px); }
+
+/* ── time chips ─────────────────────────────────── */
+.time-chips-wrap {
+    display:flex; flex-wrap:wrap; gap:8px;
+    min-height:38px; align-items:center;
+    padding:6px 10px;
+    border:1.5px solid var(--border); border-radius:8px;
+    background:var(--surface); margin-bottom:10px;
+}
+.time-chip {
+    display:inline-flex; align-items:center; gap:5px;
+    background:rgba(59,130,246,0.1); border:1px solid rgba(59,130,246,0.25);
+    color:var(--accent-blue); border-radius:20px;
+    padding:3px 10px; font-size:0.84rem; font-weight:600;
+}
+.time-chip-remove {
+    border:none; background:none; color:var(--accent-blue);
+    cursor:pointer; font-size:14px; line-height:1;
+    display:flex; align-items:center; padding:0; opacity:0.7;
+    transition:opacity 0.1s;
+}
+.time-chip-remove:hover { opacity:1; }
+.time-chips-empty { color:var(--text-muted); font-size:0.84rem; }
+
+/* ── time picker row ────────────────────────────── */
+.time-add-row {
+    display:flex; align-items:center; gap:8px;
+}
+.time-add-row input[type="time"] {
+    font-size:0.9rem; padding:7px 10px;
+    border:1.5px solid var(--border); border-radius:8px;
+    background:var(--surface); color:var(--text-primary);
+    outline:none; transition:border-color 0.15s;
+    width:148px;
+}
+.time-add-row input[type="time"]:focus {
+    border-color:var(--accent-blue);
+}
+</style>
+
+<!-- Settings card -->
+<div class="card mb-24">
+    <div class="card-header">
+        <h3>Backup Schedule</h3>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none">
+            <span class="text-sm text-muted" id="enabledLabel">Disabled</span>
+            <div class="toggle-switch" id="enabledToggle" onclick="toggleEnabled()">
+                <div class="toggle-knob"></div>
+            </div>
+        </label>
+    </div>
+
+    <!-- KPI summary -->
+    <div class="kpi-grid" style="margin-bottom:24px">
+        <div class="kpi-card blue">
+            <span class="kpi-label">Status</span>
+            <span class="kpi-value" id="statusVal" style="font-size:1rem">—</span>
+        </div>
+        <div class="kpi-card green">
+            <span class="kpi-label">Scheduled Times</span>
+            <span class="kpi-value" id="timesVal" style="font-size:0.88rem;line-height:1.4">—</span>
+        </div>
+        <div class="kpi-card orange">
+            <span class="kpi-label">Max Backups Kept</span>
+            <span class="kpi-value" id="maxVal" style="font-size:1rem">—</span>
+        </div>
+        <div class="kpi-card purple">
+            <span class="kpi-label">Files on Disk</span>
+            <span class="kpi-value" id="countVal" style="font-size:1rem">—</span>
+        </div>
+    </div>
+
+    <div style="display:grid;gap:28px;grid-template-columns:1fr 1fr">
+
+        <!-- ── Backup time picker ── -->
+        <div>
+            <label style="display:block;margin-bottom:8px;font-weight:600;font-size:0.85rem">
+                Scheduled Backup Times
+            </label>
+
+            <!-- Selected time chips -->
+            <div class="time-chips-wrap" id="timeChipsWrap">
+                <span class="time-chips-empty" id="timeChipsEmpty">No times added yet</span>
+            </div>
+
+            <!-- Add a new time -->
+            <div class="time-add-row">
+                <input type="time" id="newTimeInput" title="Pick a time (AM/PM)">
+                <button class="btn btn-outline btn-sm" onclick="addBackupTime()">
+                    <span class="material-icons-round">add</span> Add Time
+                </button>
+            </div>
+            <p class="text-sm text-muted" style="margin-top:8px">
+                Backups fire within the 5-minute window after each scheduled time.<br>
+                Add multiple times for more frequent backups.
+            </p>
+        </div>
+
+        <!-- ── Max backups ── -->
+        <div>
+            <label style="display:block;margin-bottom:8px;font-weight:600;font-size:0.85rem">
+                Maximum Backup Files to Keep
+            </label>
+            <input type="number" class="form-control" id="maxBackups"
+                min="1" max="365" placeholder="30" style="width:120px">
+            <p class="text-sm text-muted" style="margin-top:8px">
+                Oldest files beyond this limit are deleted automatically after each backup run.
+            </p>
+        </div>
+    </div>
+
+    <div style="margin-top:24px">
+        <button class="btn btn-primary btn-sm" onclick="saveSettings()">
+            <span class="material-icons-round">save</span> Save Settings
+        </button>
+    </div>
+</div>
+
+<!-- Backup history card -->
+<div class="card">
+    <div class="card-header">
+        <h3>Backup History</h3>
+        <span class="text-sm text-muted" id="historyInfo"></span>
+    </div>
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Filename</th>
+                    <th class="text-right">Size</th>
+                    <th>Created</th>
+                    <th class="text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="backupList">
+                <tr>
+                    <td colspan="4" class="loading">
+                        <div class="spinner"></div><span>Loading backup history…</span>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let _settings  = null;
+let _bkpTimes  = [];   // array of "HH:MM" strings (24-hour, internal)
+
+// ── AM/PM display helper ──────────────────────────────────────────────────────
+function fmtAmPm(hhmm) {
+    const [h, m] = hhmm.split(':').map(Number);
+    const ampm   = h >= 12 ? 'PM' : 'AM';
+    const hour   = h % 12 || 12;
+    return `${hour}:${String(m).padStart(2, '0')} ${ampm}`;
+}
+
+// ── Render time chips ──────────────────────────────────────────────────────────
+function renderTimeChips() {
+    const wrap  = document.getElementById('timeChipsWrap');
+    const empty = document.getElementById('timeChipsEmpty');
+
+    if (!_bkpTimes.length) {
+        empty.style.display = '';
+        // Remove all chips except the empty placeholder
+        wrap.querySelectorAll('.time-chip').forEach(c => c.remove());
+        return;
+    }
+    empty.style.display = 'none';
+    wrap.querySelectorAll('.time-chip').forEach(c => c.remove());
+
+    // Insert sorted chips before the empty placeholder
+    [..._bkpTimes].sort().forEach(t => {
+        const chip = document.createElement('span');
+        chip.className = 'time-chip';
+        chip.innerHTML =
+            `<span class="material-icons-round" style="font-size:14px">schedule</span>
+             ${fmtAmPm(t)}
+             <button class="time-chip-remove" title="Remove" onclick="removeBackupTime('${t}')">
+                 <span class="material-icons-round" style="font-size:15px">close</span>
+             </button>`;
+        wrap.insertBefore(chip, empty);
+    });
+
+    // Update KPI chip
+    document.getElementById('timesVal').textContent =
+        [..._bkpTimes].sort().map(fmtAmPm).join('  ·  ');
+}
+
+function addBackupTime() {
+    const input = document.getElementById('newTimeInput');
+    const val   = input.value;   // "HH:MM" from <input type="time">
+
+    if (!val) {
+        showToast('Please pick a time first', 'error');
+        return;
+    }
+    if (_bkpTimes.includes(val)) {
+        showToast(`${fmtAmPm(val)} is already in the schedule`, 'error');
+        input.value = '';
+        return;
+    }
+    _bkpTimes.push(val);
+    renderTimeChips();
+    input.value = '';
+    input.focus();
+}
+
+function removeBackupTime(t) {
+    _bkpTimes = _bkpTimes.filter(x => x !== t);
+    renderTimeChips();
+}
+
+// Allow pressing Enter in the time input to add
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('newTimeInput').addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); addBackupTime(); }
+    });
+    loadSettings();
+    loadHistory();
+});
+
+// ── Settings load / save ──────────────────────────────────────────────────────
+async function loadSettings() {
+    try {
+        const s = await apiCall('/api/backup/settings');
+        _settings = s;
+        applySettings(s);
+    } catch(e) {
+        showToast('Failed to load settings', 'error');
+    }
+}
+
+function applySettings(s) {
+    // Toggle
+    const tog = document.getElementById('enabledToggle');
+    const lbl = document.getElementById('enabledLabel');
+    tog.classList.toggle('on', s.is_enabled);
+    lbl.textContent = s.is_enabled ? 'Enabled' : 'Disabled';
+
+    // Times → parse into array, re-render chips
+    _bkpTimes = (s.backup_times || '02:00')
+        .split(',').map(t => t.trim()).filter(Boolean);
+    renderTimeChips();
+
+    // Max backups
+    document.getElementById('maxBackups').value = s.max_backups || 30;
+
+    // KPI cards
+    document.getElementById('statusVal').textContent = s.is_enabled ? 'Scheduled' : 'Off';
+    document.getElementById('maxVal').textContent    = s.max_backups || '—';
+}
+
+function toggleEnabled() {
+    if (!_settings) return;
+    _settings.is_enabled = !_settings.is_enabled;
+    applySettings(_settings);
+    saveSettings(true);
+}
+
+async function saveSettings(silent = false) {
+    if (!_bkpTimes.length) {
+        showToast('Add at least one scheduled time before saving', 'error');
+        return;
+    }
+    const maxKeep = parseInt(document.getElementById('maxBackups').value) || 30;
+
+    try {
+        const data = {
+            is_enabled:   _settings ? _settings.is_enabled : false,
+            backup_times: [..._bkpTimes].sort().join(', '),
+            max_backups:  maxKeep,
+        };
+        const res = await apiCall('/api/backup/settings', {
+            method:  'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body:    JSON.stringify(data),
+        });
+        _settings = res.settings;
+        applySettings(res.settings);
+        if (!silent) showToast('Settings saved', 'success');
+    } catch(e) {
+        showToast('Failed to save settings', 'error');
+    }
+}
+
+// ── Take backup now ───────────────────────────────────────────────────────────
+async function runBackupNow() {
+    const btn = document.getElementById('runNowBtn');
+    btn.disabled = true;
+    btn.innerHTML =
+        '<div class="spinner" style="width:16px;height:16px;display:inline-block;vertical-align:middle;margin-right:6px"></div> Running…';
+
+    try {
+        const res = await apiCall('/api/backup/run', { method: 'POST' });
+        if (res.status === 'success') {
+            showToast(`Backup created: ${res.filename} (${res.size_mb} MB)`, 'success');
+            loadHistory();
+        } else {
+            showToast('Backup failed: ' + (res.message || 'unknown error'), 'error');
+        }
+    } catch(e) {
+        showToast('Backup request failed', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-icons-round">backup</span> Take Backup Now';
+    }
+}
+
+// ── Backup history ────────────────────────────────────────────────────────────
+async function loadHistory() {
+    const tbody = document.getElementById('backupList');
+    try {
+        const data = await apiCall('/api/backup/list');
+        const list = data.backups || [];
+
+        document.getElementById('countVal').textContent    = list.length;
+        document.getElementById('historyInfo').textContent =
+            `${list.length} file${list.length !== 1 ? 's' : ''} on disk`;
+
+        if (!list.length) {
+            tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--text-muted)">
+                No backups yet — click <strong>Take Backup Now</strong> to create one.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = list.map(b => `
+            <tr>
+                <td style="font-family:monospace;font-size:0.82rem">${escHtml(b.filename)}</td>
+                <td class="text-right" style="white-space:nowrap">${b.size_mb} MB</td>
+                <td style="white-space:nowrap">${b.created_at}</td>
+                <td class="text-center" style="white-space:nowrap">
+                    <a href="${(window.URL_PREFIX||'')}/api/backup/download/${encodeURIComponent(b.filename)}"
+                       class="btn btn-outline btn-sm" style="margin-right:4px" title="Download">
+                        <span class="material-icons-round">download</span>
+                    </a>
+                    <button class="btn btn-sm"
+                        style="background:var(--accent-red);border-color:var(--accent-red);color:#fff"
+                        onclick="deleteBackup('${escHtml(b.filename)}')" title="Delete">
+                        <span class="material-icons-round">delete</span>
+                    </button>
+                </td>
+            </tr>`).join('');
+    } catch(e) {
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--accent-red)">
+            Failed to load backup history.</td></tr>`;
+    }
+}
+
+async function deleteBackup(filename) {
+    const ok = await showConfirm(`"${filename}" will be permanently removed from disk.`, 'Delete Backup');
+    if (!ok) return;
+    try {
+        await apiCall(`/api/backup/delete/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+        showToast('Backup deleted', 'success');
+        loadHistory();
+    } catch(e) {
+        showToast('Failed to delete backup', 'error');
+    }
+}
+</script>
+{% endblock %}

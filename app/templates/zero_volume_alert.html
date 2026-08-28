@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block title %}Zero Volume Alert{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>ZERO VOLUME ALERT</h1>
+    <p class="page-subtitle">Alert for active plants with zero production yesterday</p>
+</div>
+
+<div class="email-settings-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+
+    <!-- SMTP Credentials -->
+    <div class="card" style="grid-column:1;">
+        <div class="card-header">
+            <h3><span class="material-icons-round" style="vertical-align:middle;margin-right:6px;">mail</span>Gmail Credentials</h3>
+        </div>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:14px;">
+            <div class="form-group">
+                <label>Gmail Address</label>
+                <input type="email" id="smtpEmail" class="form-control" placeholder="your-email@gmail.com" />
+            </div>
+            <div class="form-group">
+                <label>App Password</label>
+                <div style="display:flex;gap:8px;">
+                    <input type="password" id="smtpPassword" class="form-control" placeholder="Enter app password" style="flex:1;" />
+                    <button class="btn btn-outline btn-sm" onclick="togglePw()" title="Show / Hide" style="min-width:40px;">
+                        <span class="material-icons-round" id="pwToggleIcon">visibility</span>
+                    </button>
+                </div>
+                <small id="passwordHint" class="text-muted" style="margin-top:4px;display:block;"></small>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:4px;">
+                <button class="btn btn-primary btn-sm" id="testBtn" onclick="testConnection()">
+                    <span class="material-icons-round" style="font-size:16px;">wifi_tethering</span> Test Connection
+                </button>
+                <span id="testResult" style="font-size:0.85rem;line-height:2;"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recipients -->
+    <div class="card" style="grid-column:2;">
+        <div class="card-header">
+            <h3><span class="material-icons-round" style="vertical-align:middle;margin-right:6px;">group</span>Recipients</h3>
+        </div>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:14px;">
+            <div class="form-group">
+                <label>To (comma-separated)</label>
+                <textarea id="toAddresses" class="form-control" rows="3" placeholder="recipient1@company.com"></textarea>
+            </div>
+            <div class="form-group">
+                <label>CC (comma-separated)</label>
+                <textarea id="ccAddresses" class="form-control" rows="3" placeholder="cc1@company.com"></textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- Signature -->
+    <div class="card" style="grid-column:1;">
+        <div class="card-header">
+            <h3><span class="material-icons-round" style="vertical-align:middle;margin-right:6px;">draw</span>Email Signature</h3>
+        </div>
+        <div class="card-body">
+            <div class="form-group">
+                <label>Signature (HTML supported)</label>
+                <textarea id="signatureHtml" class="form-control" rows="5" placeholder="<b>Regards,</b><br>Your Name"></textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="card" style="grid-column:2;">
+        <div class="card-header">
+            <h3><span class="material-icons-round" style="vertical-align:middle;margin-right:6px;">tune</span>Alert Controls</h3>
+        </div>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:16px;">
+            <div style="display:flex;align-items:center;gap:12px;">
+                <label class="switch"><input type="checkbox" id="isEnabled" /><span class="slider"></span></label>
+                <span style="font-size:0.9rem;">Enable zero volume alert</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;">
+                <label class="switch"><input type="checkbox" id="zvIncludeEmpDetails" /><span class="slider"></span></label>
+                <span style="font-size:0.9rem;">Include Employee &amp; TM Details columns</span>
+            </div>
+            <div class="form-group">
+                <label>Schedule Times (IST)</label>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                    <input type="time" id="newAlertTime" class="form-control" style="width:130px;" value="18:00" />
+                    <button class="btn btn-primary btn-sm" onclick="addTime('alert')" style="white-space:nowrap;">
+                        <span class="material-icons-round" style="font-size:16px;">add</span> Add
+                    </button>
+                </div>
+                <div id="alertTimesList" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;"></div>
+            </div>
+            <p style="font-size:0.82rem;color:var(--text-muted);margin:0;">
+                Lists all <strong>active plants</strong> with <strong>zero production</strong> from yesterday.
+            </p>
+            <hr style="border:none;border-top:1px solid var(--border);margin:4px 0;">
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <button class="btn btn-success" onclick="saveSettings()">
+                    <span class="material-icons-round" style="font-size:16px;">save</span> Save Settings
+                </button>
+                <button class="btn btn-outline" id="sendNowBtn" onclick="sendNow('/api/email-settings/send-now', 'sendNowBtn')">
+                    <span class="material-icons-round" style="font-size:16px;">send</span> Send Now (Test)
+                </button>
+            </div>
+            <div id="saveResult" style="font-size:0.85rem;margin-top:4px;"></div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .switch{position:relative;display:inline-block;width:46px;height:24px}.switch input{opacity:0;width:0;height:0}.slider{position:absolute;cursor:pointer;inset:0;background:var(--bg-tertiary);border-radius:24px;transition:.3s}.slider::before{content:"";position:absolute;height:18px;width:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s}.switch input:checked+.slider{background:var(--accent-green)}.switch input:checked+.slider::before{transform:translateX(22px)}
+    .email-settings-grid .form-group{display:flex;flex-direction:column;gap:4px}
+    .email-settings-grid label{font-size:0.82rem;font-weight:600;color:var(--text-secondary)}
+    .email-settings-grid .form-control{background:var(--bg-tertiary);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:0.88rem;color:var(--text-primary);width:100%;transition:border-color .2s}
+    .email-settings-grid .form-control:focus{border-color:var(--accent-blue);outline:none}
+    .email-settings-grid textarea.form-control{resize:vertical;font-family:inherit}
+    .time-tag{display:inline-flex;align-items:center;gap:4px;background:var(--accent-blue);color:#fff;border-radius:16px;padding:4px 10px 4px 12px;font-size:0.82rem;font-weight:500}
+    .time-tag button{background:none;border:none;color:#fff;cursor:pointer;font-size:14px;line-height:1;padding:0;opacity:0.8}
+    .time-tag button:hover{opacity:1}
+    @media(max-width:900px){.email-settings-grid{grid-template-columns:1fr !important}.email-settings-grid .card{grid-column:1 !important}}
+</style>
+
+<script>
+let _times = ['18:00'];
+
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        const d = await apiCall('/api/email-settings');
+        document.getElementById('smtpEmail').value = d.smtp_email || '';
+        document.getElementById('toAddresses').value = d.to_addresses || '';
+        document.getElementById('ccAddresses').value = d.cc_addresses || '';
+        document.getElementById('signatureHtml').value = d.signature_html || '';
+        document.getElementById('isEnabled').checked = d.is_enabled;
+        document.getElementById('zvIncludeEmpDetails').checked = d.zv_include_employee_details !== false;
+        if (d.has_password) document.getElementById('passwordHint').textContent = '✓ Password saved. Leave blank to keep.';
+        _times = (d.alert_times || '18:00').split(',').map(t => t.trim()).filter(Boolean);
+        renderTimes('alertTimesList', _times, 'alert');
+    } catch { showToast('Failed to load settings', 'error'); }
+});
+
+function togglePw() {
+    const i = document.getElementById('smtpPassword'), ic = document.getElementById('pwToggleIcon');
+    i.type = i.type === 'password' ? 'text' : 'password';
+    ic.textContent = i.type === 'password' ? 'visibility' : 'visibility_off';
+}
+
+async function testConnection() {
+    const btn = document.getElementById('testBtn'), res = document.getElementById('testResult');
+    btn.disabled = true; btn.innerHTML = '<span class="material-icons-round spin" style="font-size:16px;">autorenew</span> Testing...';
+    try {
+        const r = await apiCall('/api/email-settings/test', { method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ smtp_email: document.getElementById('smtpEmail').value.trim(), smtp_password: document.getElementById('smtpPassword').value.trim(), smtp_host:'smtp.gmail.com', smtp_port:587 }) });
+        res.innerHTML = r.success ? '<span style="color:var(--accent-green);">✓ Connection successful</span>' : `<span style="color:var(--accent-red);">✗ ${r.message}</span>`;
+    } catch { res.innerHTML = '<span style="color:var(--accent-red);">✗ Failed</span>'; }
+    finally { btn.disabled = false; btn.innerHTML = '<span class="material-icons-round" style="font-size:16px;">wifi_tethering</span> Test Connection'; }
+}
+
+async function saveSettings() {
+    const payload = {
+        smtp_email: document.getElementById('smtpEmail').value.trim(),
+        smtp_password: document.getElementById('smtpPassword').value,
+        to_addresses: document.getElementById('toAddresses').value.trim(),
+        cc_addresses: document.getElementById('ccAddresses').value.trim(),
+        signature_html: document.getElementById('signatureHtml').value,
+        is_enabled: document.getElementById('isEnabled').checked,
+        alert_times: _times.join(','),
+        zv_include_employee_details: document.getElementById('zvIncludeEmpDetails').checked,
+    };
+    if (!payload.smtp_password) delete payload.smtp_password;
+    try {
+        await apiCall('/api/email-settings', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+        document.getElementById('saveResult').innerHTML = '<span style="color:var(--accent-green);">✓ Settings saved</span>';
+        showToast('Settings saved', 'success');
+        if (document.getElementById('smtpPassword').value) {
+            document.getElementById('passwordHint').textContent = '✓ Password saved. Leave blank to keep.';
+            document.getElementById('smtpPassword').value = '';
+        }
+    } catch { document.getElementById('saveResult').innerHTML = '<span style="color:var(--accent-red);">✗ Save failed</span>'; }
+}
+
+async function sendNow(url, btnId) {
+    const btn = document.getElementById(btnId);
+    btn.disabled = true; btn.innerHTML = '<span class="material-icons-round spin" style="font-size:16px;">autorenew</span> Sending...';
+    try {
+        const r = await apiCall(url, { method:'POST', headers:{'Content-Type':'application/json'} });
+        showToast(r.message, r.success ? 'success' : 'error');
+    } catch { showToast('Send failed', 'error'); }
+    finally { btn.disabled = false; btn.innerHTML = '<span class="material-icons-round" style="font-size:16px;">send</span> Send Now (Test)'; }
+}
+
+function renderTimes(containerId, arr, prefix) {
+    const c = document.getElementById(containerId); if (!c) return; c.innerHTML = '';
+    arr.forEach((t, i) => {
+        const h = parseInt(t.split(':')[0]), m = t.split(':')[1];
+        const label = `${h % 12 || 12}:${m} ${h >= 12 ? 'PM' : 'AM'}`;
+        const tag = document.createElement('span'); tag.className = 'time-tag';
+        tag.innerHTML = `<span class="material-icons-round" style="font-size:14px;">schedule</span> ${label} <button onclick="removeTime('${prefix}',${i})">✕</button>`;
+        c.appendChild(tag);
+    });
+}
+
+function addTime(prefix) {
+    const input = document.getElementById(prefix === 'alert' ? 'newAlertTime' : 'newReportTime');
+    const arr = prefix === 'alert' ? _times : window._rptTimes;
+    if (!input.value || arr.includes(input.value)) { showToast('Already added or empty', 'warning'); return; }
+    arr.push(input.value); arr.sort();
+    renderTimes(prefix === 'alert' ? 'alertTimesList' : 'reportTimesList', arr, prefix);
+}
+
+function removeTime(prefix, idx) {
+    const arr = prefix === 'alert' ? _times : window._rptTimes;
+    arr.splice(idx, 1);
+    if (!arr.length) { arr.push('18:00'); showToast('Reset to 6:00 PM', 'info'); }
+    renderTimes(prefix === 'alert' ? 'alertTimesList' : 'reportTimesList', arr, prefix);
+}
+</script>
+{% endblock %}

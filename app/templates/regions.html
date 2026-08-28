@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}Areas — Daily Volume Tracker{% endblock %}
+{% block page_title %}Area Management{% endblock %}
+
+{% block top_actions %}
+<button class="btn btn-primary btn-sm" onclick="showAddRegion()">
+    <span class="material-icons-round">add</span> Add Area
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3>All Areas</h3>
+        <span class="text-sm text-muted" id="regionCount"></span>
+    </div>
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th style="width:60px;">Order</th>
+                    <th>Area Name</th>
+                    <th style="width:100px;" class="text-center">Plants</th>
+                    <th style="width:160px;" class="text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="regionsBody">
+                <tr><td colspan="4" class="loading"><div class="spinner"></div><span>Loading...</span></td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div class="modal-overlay" id="regionModal">
+    <div class="modal" style="max-width:420px;">
+        <div class="modal-header">
+            <h3 id="regionModalTitle">Add Area</h3>
+            <button class="modal-close" onclick="closeModal()">
+                <span class="material-icons-round">close</span>
+            </button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="editingRegionId">
+            <div class="form-group">
+                <label>Area Name *</label>
+                <input type="text" class="form-control" id="modalRegionName" placeholder="e.g., DELHI NCR">
+            </div>
+            <div class="form-group">
+                <label>Display Order</label>
+                <input type="number" class="form-control" id="modalRegionOrder" placeholder="e.g., 1" min="1">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveRegion()">Save</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', loadRegions);
+
+let _plantCounts = {};
+
+async function loadRegions() {
+    const body = document.getElementById('regionsBody');
+    try {
+        const [regData, plantData] = await Promise.all([
+            apiCall('/api/regions'),
+            apiCall('/api/plants'),
+        ]);
+        const regions = regData.regions;
+
+        // Count plants per region
+        _plantCounts = {};
+        for (const p of plantData.plants) {
+            const r = p.region || '(none)';
+            _plantCounts[r] = (_plantCounts[r] || 0) + 1;
+        }
+
+        document.getElementById('regionCount').textContent = `${regions.length} areas`;
+
+        if (!regions.length) {
+            body.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:40px;color:var(--text-muted);">No areas yet. Click Add Area.</td></tr>';
+            return;
+        }
+
+        let html = '';
+        for (const r of regions) {
+            const cnt = _plantCounts[r.name] || 0;
+            html += `<tr>
+                <td class="text-center"><span class="badge badge-blue">${r.display_order}</span></td>
+                <td><strong>${escHtml(r.name)}</strong></td>
+                <td class="text-center">${cnt}</td>
+                <td class="text-center">
+                    <button class="btn btn-outline btn-xs" onclick="editRegion(${r.id}, '${escHtml(r.name)}', ${r.display_order})" title="Edit">
+                        <span class="material-icons-round" style="font-size:16px;">edit</span>
+                    </button>
+                    <button class="btn btn-outline btn-xs" onclick="moveRegion(${r.id}, 'up')" title="Move Up" style="margin-left:4px;">
+                        <span class="material-icons-round" style="font-size:16px;">arrow_upward</span>
+                    </button>
+                    <button class="btn btn-outline btn-xs" onclick="moveRegion(${r.id}, 'down')" title="Move Down" style="margin-left:4px;">
+                        <span class="material-icons-round" style="font-size:16px;">arrow_downward</span>
+                    </button>
+                    <button class="btn btn-outline btn-xs" onclick="deleteRegion(${r.id}, '${escHtml(r.name)}')" title="Delete" style="margin-left:4px;color:var(--accent-red);">
+                        <span class="material-icons-round" style="font-size:16px;">delete</span>
+                    </button>
+                </td>
+            </tr>`;
+        }
+
+        // Unassigned row (read-only)
+        const unassigned = _plantCounts['(none)'] || _plantCounts[''] || 0;
+        html += `<tr style="opacity:0.7;font-style:italic;">
+            <td class="text-center">—</td>
+            <td>Unassigned</td>
+            <td class="text-center">${unassigned}</td>
+            <td class="text-center text-muted" style="font-size:0.8rem;">Auto-assigned</td>
+        </tr>`;
+
+        body.innerHTML = html;
+    } catch {
+        body.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--accent-red);">Failed to load</td></tr>';
+    }
+}
+
+function showAddRegion() {
+    document.getElementById('regionModalTitle').textContent = 'Add Area';
+    document.getElementById('editingRegionId').value = '';
+    document.getElementById('modalRegionName').value = '';
+    document.getElementById('modalRegionOrder').value = '';
+    document.getElementById('regionModal').classList.add('show');
+}
+
+function editRegion(id, name, order) {
+    document.getElementById('regionModalTitle').textContent = 'Edit Area';
+    document.getElementById('editingRegionId').value = id;
+    document.getElementById('modalRegionName').value = name;
+    document.getElementById('modalRegionOrder').value = order;
+    document.getElementById('regionModal').classList.add('show');
+}
+
+function closeModal() {
+    document.getElementById('regionModal').classList.remove('show');
+}
+
+async function saveRegion() {
+    const id = document.getElementById('editingRegionId').value;
+    const name = document.getElementById('modalRegionName').value.trim();
+    const order = document.getElementById('modalRegionOrder').value;
+
+    if (!name) { showToast('Name is required', 'warning'); return; }
+
+    const payload = { name };
+    if (order) payload.display_order = parseInt(order);
+
+    try {
+        if (id) {
+            await apiCall(`/api/regions/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+            showToast('Area updated', 'success');
+        } else {
+            await apiCall('/api/regions', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+            showToast('Area added', 'success');
+        }
+        closeModal();
+        loadRegions();
+    } catch {}
+}
+
+async function deleteRegion(id, name) {
+    const ok = await showConfirm(`Delete area "${name}"? Plants in this area will be unassigned.`, 'Delete Area');
+    if (!ok) return;
+    try {
+        const r = await apiCall(`/api/regions/${id}`, { method: 'DELETE' });
+        showToast(r.message, 'success');
+        loadRegions();
+    } catch {}
+}
+
+async function moveRegion(id, direction) {
+    // Get current order, swap with neighbor
+    const data = await apiCall('/api/regions');
+    const regions = data.regions;
+    const idx = regions.findIndex(r => r.id === id);
+    if (idx < 0) return;
+
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= regions.length) return;
+
+    // Swap display_order
+    const order = regions.map(r => r.id);
+    [order[idx], order[swapIdx]] = [order[swapIdx], order[idx]];
+
+    await apiCall('/api/regions/reorder', {
+        method: 'PUT', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ order }),
+    });
+    loadRegions();
+}
+</script>
+{% endblock %}

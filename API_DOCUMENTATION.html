@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Daily Volume Tracker — Public API Docs</title>
+<style>
+  :root {
+    --bg: #f5f7fa;
+    --surface: #ffffff;
+    --border: #e2e8f0;
+    --text: #1a2233;
+    --text-muted: #64748b;
+    --accent: #1a5276;
+    --accent-soft: #eaf2f8;
+    --code-bg: #0f172a;
+    --code-text: #e2e8f0;
+    --green: #1e8e5a;
+    --red: #c0392b;
+    --amber: #b7791f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1520;
+      --surface: #161e2c;
+      --border: #2a3446;
+      --text: #e6ebf2;
+      --text-muted: #94a3b8;
+      --accent: #5aa9d6;
+      --accent-soft: #1b2a38;
+      --code-bg: #0a0e16;
+      --code-text: #dbe4ee;
+      --green: #4ade80;
+      --red: #f87171;
+      --amber: #fbbf24;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 40px 24px 100px; }
+  header {
+    margin-bottom: 36px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  h1 { font-size: 1.9rem; margin: 0 0 6px; }
+  h2 {
+    font-size: 1.35rem;
+    margin: 44px 0 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+  }
+  h2:first-of-type { border-top: none; padding-top: 0; }
+  h3 { font-size: 1.05rem; margin: 26px 0 8px; }
+  p { color: var(--text); }
+  .subtitle { color: var(--text-muted); font-size: 1rem; margin: 0; }
+  .badge {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 3px 9px;
+    border-radius: 20px;
+    margin-right: 8px;
+  }
+  .badge.post { background: rgba(30,142,90,0.15); color: var(--green); }
+  .badge.get { background: rgba(90,169,214,0.15); color: var(--accent); }
+  .route-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: "SFMono-Regular", Consolas, Menlo, monospace;
+    font-size: 1rem;
+    margin: 0 0 4px;
+  }
+  code, .mono {
+    font-family: "SFMono-Regular", Consolas, Menlo, monospace;
+    font-size: 0.88em;
+    background: var(--accent-soft);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+  pre {
+    background: var(--code-bg);
+    color: var(--code-text);
+    padding: 16px 18px;
+    border-radius: 10px;
+    overflow-x: auto;
+    font-family: "SFMono-Regular", Consolas, Menlo, monospace;
+    font-size: 0.86rem;
+    line-height: 1.55;
+  }
+  pre code { background: none; padding: 0; color: inherit; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 24px;
+    margin-bottom: 20px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 0.92rem;
+  }
+  th, td {
+    text-align: left;
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th { color: var(--text-muted); font-weight: 600; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.03em; }
+  .steps { counter-reset: step; list-style: none; padding: 0; margin: 16px 0; }
+  .steps li {
+    counter-increment: step;
+    position: relative;
+    padding-left: 40px;
+    margin-bottom: 16px;
+  }
+  .steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0; top: 0;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.82rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .note {
+    border-left: 3px solid var(--amber);
+    background: var(--accent-soft);
+    padding: 10px 16px;
+    border-radius: 0 8px 8px 0;
+    font-size: 0.92rem;
+    margin: 14px 0;
+  }
+  .toc {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 16px;
+  }
+  .toc a {
+    font-size: 0.84rem;
+    padding: 5px 12px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    color: var(--text);
+    text-decoration: none;
+    background: var(--surface);
+  }
+  .toc a:hover { border-color: var(--accent); color: var(--accent); }
+  .status-ok { color: var(--green); font-weight: 700; }
+  .status-err { color: var(--red); font-weight: 700; }
+  a { color: var(--accent); }
+  footer { margin-top: 60px; color: var(--text-muted); font-size: 0.82rem; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Daily Volume Tracker — Public API</h1>
+    <p class="subtitle">Login-based API for external applications to pull production data. Test it in Postman.</p>
+    <nav class="toc">
+      <a href="#base-url">Base URL</a>
+      <a href="#step1">1. Get a token</a>
+      <a href="#volumes">2. Volume data (daily / monthly / yearly)</a>
+      <a href="#postman">Postman setup</a>
+      <a href="#verified">Live verification</a>
+      <a href="#errors">Errors</a>
+    </nav>
+  </header>
+
+  <h2 id="base-url">Base URL</h2>
+  <div class="card">
+    <p>Every route in this app — including the public API — sits behind a fixed path prefix. On a local server:</p>
+    <pre><code>http://localhost:8089/r4x8e/api/v1/...</code></pre>
+    <p style="margin-bottom:0">The rest of this page shows paths as <code>/api/v1/...</code> for brevity — prepend your deployment origin and <code>/r4x8e</code> in your requests.</p>
+  </div>
+
+  <h2 id="step1">1. Get a token</h2>
+  <div class="card">
+    <p class="route-title"><span class="badge post">POST</span> /api/v1/token</p>
+    <p>Exchange a username + password (the same credentials used to log into the web app) for a Bearer token. No admin setup needed — any active user account works.</p>
+
+    <h3>Request body (JSON)</h3>
+    <pre><code>{
+  "username": "your_username",
+  "password": "your_password"
+}</code></pre>
+
+    <h3>Response — <span class="status-ok">200 OK</span></h3>
+    <pre><code>{
+  "token": "dvt_x7QpK2mF9...",
+  "token_type": "Bearer",
+  "expires_at": "2026-07-19T10:58:10",
+  "expires_in_seconds": 86400
+}</code></pre>
+
+    <div class="note">
+      <strong>Token lifetime:</strong> tokens expire 24 hours after issue. Call this endpoint again to get a fresh one — there's no separate refresh mechanism.
+    </div>
+
+    <h3>Failure responses</h3>
+    <table>
+      <tr><th>Status</th><th>Body</th><th>Meaning</th></tr>
+      <tr><td class="status-err">400</td><td><code>{"error": "username and password are required"}</code></td><td>Missing field</td></tr>
+      <tr><td class="status-err">401</td><td><code>{"error": "Invalid credentials"}</code></td><td>Wrong username/password, or account disabled</td></tr>
+      <tr><td class="status-err">429</td><td><code>{"error": "Too many failed attempts. Try again in N minute(s)."}</code></td><td>5 failed attempts from the same IP locks it out for 15 minutes</td></tr>
+    </table>
+  </div>
+
+  <h2 id="volumes">2. Volume data — daily / monthly / yearly</h2>
+  <div class="card">
+    <p>Three endpoints, one per time granularity. All three share the same shape and the same two query params, and all only ever include <strong>active</strong> plants.</p>
+
+    <h3>Shared query params</h3>
+    <table>
+      <tr><th>Param</th><th>Required</th><th>Description</th></tr>
+      <tr><td><code>metric</code></td><td>No</td><td><code>produced</code> (default) or <code>invoiced</code>. Toggles between produced volume and invoiced quantity — same two views as the Analytics page's Production/Invoiced toggle.</td></tr>
+      <tr><td><em>(period param — see each endpoint below)</em></td><td>No</td><td>Defaults to the current day / month / year if omitted.</td></tr>
+    </table>
+
+    <h3>Shared per-plant fields</h3>
+    <table>
+      <tr><th>Field</th><th>Description</th></tr>
+      <tr><td><code>plant_code</code></td><td>Unique plant identifier</td></tr>
+      <tr><td><code>daily_tracker_name</code></td><td>Plant name as used in the daily tracker</td></tr>
+      <tr><td><code>erp_name</code></td><td>Plant name as used in the ERP system (may differ from tracker name)</td></tr>
+      <tr><td><code>plant_name</code></td><td>Combined human-readable name — <code>"tracker (erp)"</code> when they differ</td></tr>
+      <tr><td><code>region</code></td><td>Area/region the plant belongs to</td></tr>
+      <tr><td><code>is_manual_entry</code></td><td><code>true</code> if this plant's volume is entered manually rather than pulled from the ERP sync</td></tr>
+      <tr><td><code>volume</code></td><td>The number itself — produced or invoiced, in m³, for the requested period</td></tr>
+    </table>
+
+    <h3 id="daily">2a. <span class="badge get">GET</span> /api/v1/volumes/daily</h3>
+    <p>Volume for a single day.</p>
+    <table>
+      <tr><th>Param</th><th>Required</th><th>Description</th></tr>
+      <tr><td><code>date</code></td><td>No</td><td><code>YYYY-MM-DD</code>. Defaults to today.</td></tr>
+    </table>
+    <pre><code>GET /api/v1/volumes/daily?date=2026-07-17
+Authorization: Bearer dvt_x7QpK2mF9...
+
+→ 200 OK
+{
+  "period": "daily",
+  "date": "2026-07-17",
+  "metric": "produced",
+  "count": 135,
+  "plants": [
+    {
+      "plant_code": "FR2",
+      "daily_tracker_name": "NCR-Faridabad",
+      "erp_name": "Faridabad-Mathura Road",
+      "plant_name": "NCR-Faridabad (Faridabad-Mathura Road)",
+      "region": "DELHI NCR",
+      "is_manual_entry": false,
+      "volume": 103.5
+    }
+  ]
+}</code></pre>
+
+    <h3 id="monthly">2b. <span class="badge get">GET</span> /api/v1/volumes/monthly</h3>
+    <p>Volume totalled over a single month.</p>
+    <table>
+      <tr><th>Param</th><th>Required</th><th>Description</th></tr>
+      <tr><td><code>month</code></td><td>No</td><td><code>YYYY-MM</code>. Defaults to the current month.</td></tr>
+    </table>
+    <pre><code>GET /api/v1/volumes/monthly?month=2026-07
+Authorization: Bearer dvt_x7QpK2mF9...
+
+→ 200 OK
+{
+  "period": "monthly",
+  "month": "2026-07-01",
+  "metric": "produced",
+  "count": 135,
+  "plants": [
+    { "plant_code": "FR2", "...": "...", "volume": 4259.0 }
+  ]
+}</code></pre>
+
+    <h3 id="yearly">2c. <span class="badge get">GET</span> /api/v1/volumes/yearly</h3>
+    <p>Volume totalled over a full calendar year (Jan–Dec), <strong>plus a month-by-month breakdown</strong> so you don't need 12 separate calls.</p>
+    <table>
+      <tr><th>Param</th><th>Required</th><th>Description</th></tr>
+      <tr><td><code>year</code></td><td>No</td><td>4-digit year, e.g. <code>2026</code>. Defaults to the current year.</td></tr>
+    </table>
+    <pre><code>GET /api/v1/volumes/yearly?year=2026
+Authorization: Bearer dvt_x7QpK2mF9...
+
+→ 200 OK
+{
+  "period": "yearly",
+  "year": 2026,
+  "metric": "produced",
+  "count": 135,
+  "plants": [
+    {
+      "plant_code": "FR2",
+      "...": "...",
+      "volume": 39614.25,
+      "monthly_breakdown": {
+        "2026-01": 4091.0, "2026-02": 6445.0, "2026-03": 5562.0,
+        "2026-04": 7593.5, "2026-05": 5799.0, "2026-06": 5864.75,
+        "2026-07": 4259.0, "2026-08": 0.0, "2026-09": 0.0,
+        "2026-10": 0.0, "2026-11": 0.0, "2026-12": 0.0
+      }
+    }
+  ]
+}</code></pre>
+    <p style="margin-bottom:0">Months with no data yet (e.g. future months) show <code>0.0</code> rather than being omitted — every plant always has all 12 keys.</p>
+
+    <h3>Failure responses (all three endpoints)</h3>
+    <table>
+      <tr><th>Status</th><th>Body</th><th>Meaning</th></tr>
+      <tr><td class="status-err">400</td><td><code>{"error": "Invalid date. Use YYYY-MM-DD."}</code></td><td><code>/daily</code> only — bad <code>date</code></td></tr>
+      <tr><td class="status-err">400</td><td><code>{"error": "Invalid month. Use YYYY-MM."}</code></td><td><code>/monthly</code> only — bad <code>month</code></td></tr>
+      <tr><td class="status-err">400</td><td><code>{"error": "Invalid year. Use a 4-digit year, e.g. 2026."}</code></td><td><code>/yearly</code> only — bad <code>year</code></td></tr>
+      <tr><td class="status-err">400</td><td><code>{"error": "Invalid metric. Use 'produced' or 'invoiced'."}</code></td><td>Bad <code>metric</code> value</td></tr>
+      <tr><td class="status-err">401</td><td><code>{"error": "Missing API token. Send it as: Authorization: Bearer &lt;token&gt;"}</code></td><td>No <code>Authorization</code> header</td></tr>
+      <tr><td class="status-err">401</td><td><code>{"error": "Invalid, revoked, or expired API token"}</code></td><td>Bad or expired token — get a new one via step 1</td></tr>
+    </table>
+  </div>
+
+  <h2 id="postman">Testing in Postman</h2>
+  <div class="card">
+    <ol class="steps">
+      <li>
+        <strong>Get a token.</strong> Create a new request: <code>POST</code> to <code>http://localhost:8089/r4x8e/api/v1/token</code>.
+        In the <strong>Body</strong> tab, choose <strong>raw</strong> → <strong>JSON</strong>, and paste:
+        <pre><code>{
+  "username": "your_username",
+  "password": "your_password"
+}</code></pre>
+        Hit <strong>Send</strong>. Copy the <code>token</code> value from the response.
+      </li>
+      <li>
+        <strong>Call a volume endpoint.</strong> Create a new request: <code>GET</code> to
+        <code>http://localhost:8089/r4x8e/api/v1/volumes/monthly?month=2026-07</code>
+        (or <code>/volumes/daily?date=...</code>, or <code>/volumes/yearly?year=...</code>).
+        Go to the <strong>Authorization</strong> tab, set type to <strong>Bearer Token</strong>, and paste the token you copied.
+        Hit <strong>Send</strong>.
+      </li>
+      <li>
+        <strong>Tip:</strong> save the token in a Postman <em>environment variable</em> (e.g. <code>{{dvt_token}}</code>) via a
+        small script in step 1's <strong>Tests</strong> tab, so step 2 can reference
+        <code>Bearer {{dvt_token}}</code> without manual copy-pasting each time:
+        <pre><code>pm.environment.set("dvt_token", pm.response.json().token);</code></pre>
+      </li>
+    </ol>
+  </div>
+
+  <h2 id="verified">Live verification</h2>
+  <div class="card">
+    <p>All endpoints were driven end-to-end against a real running instance of this app (2026-07-27) — not simulated. A disposable test account was used and deleted immediately after; no real user data was touched or exposed. The values below are the actual captured output.</p>
+
+    <h3>1. Correct credentials → token issued</h3>
+    <pre><code>POST /api/v1/token
+{"username": "&lt;valid_user&gt;", "password": "&lt;correct_password&gt;"}
+
+→ 200 OK
+{"token": "dvt_...", "token_type": "Bearer", "expires_at": "...", "expires_in_seconds": 86400}</code></pre>
+
+    <h3>2. Wrong password → rejected</h3>
+    <pre><code>POST /api/v1/token
+{"username": "&lt;valid_user&gt;", "password": "WrongPassword!"}
+
+→ 401 Unauthorized
+{"error": "Invalid credentials"}</code></pre>
+
+    <h3>3. Daily volume, produced (default)</h3>
+    <pre><code>GET /api/v1/volumes/daily?date=2026-07-17
+→ 200 OK — period=daily, date=2026-07-17, metric=produced, count=135
+sample: {"plant_code":"FR2","plant_name":"NCR-Faridabad (Faridabad-Mathura Road)","region":"DELHI NCR","is_manual_entry":false,"volume":103.5}</code></pre>
+
+    <h3>4. Daily volume, invoiced, default date</h3>
+    <pre><code>GET /api/v1/volumes/daily?metric=invoiced
+→ 200 OK — period=daily, date=2026-07-27 (today, no date given), metric=invoiced, count=135</code></pre>
+
+    <h3>5. Monthly volume</h3>
+    <pre><code>GET /api/v1/volumes/monthly?month=2026-07
+→ 200 OK — period=monthly, month=2026-07-01, metric=produced, count=135
+sample: {"plant_code":"FR2", "...": "...", "volume": 4259.0}</code></pre>
+
+    <h3>6. Yearly volume with monthly breakdown</h3>
+    <pre><code>GET /api/v1/volumes/yearly?year=2026
+→ 200 OK — period=yearly, year=2026, metric=produced, count=135
+sample: {
+  "plant_code": "FR2", "...": "...", "volume": 39614.25,
+  "monthly_breakdown": {
+    "2026-01": 4091.0, "2026-02": 6445.0, "2026-03": 5562.0, "2026-04": 7593.5,
+    "2026-05": 5799.0, "2026-06": 5864.75, "2026-07": 4259.0,
+    "2026-08": 0.0, "2026-09": 0.0, "2026-10": 0.0, "2026-11": 0.0, "2026-12": 0.0
+  }
+}</code></pre>
+
+    <h3>7. Every validation error, confirmed live</h3>
+    <pre><code>GET /api/v1/volumes/daily?date=bad          → 400 {"error": "Invalid date. Use YYYY-MM-DD."}
+GET /api/v1/volumes/monthly?month=bad        → 400 {"error": "Invalid month. Use YYYY-MM."}
+GET /api/v1/volumes/yearly?year=99999        → 400 {"error": "Invalid year. Use a 4-digit year, e.g. 2026."}
+GET /api/v1/volumes/monthly?metric=bogus     → 400 {"error": "Invalid metric. Use 'produced' or 'invoiced'."}
+GET /api/v1/volumes/monthly (no token)       → 401 {"error": "Missing API token. Send it as: Authorization: Bearer &lt;token&gt;"}</code></pre>
+  </div>
+
+  <h2 id="errors">General notes</h2>
+  <div class="card">
+    <ul style="margin:0; padding-left:20px;">
+      <li>Everything here is read-only — there is no write API for external applications yet. Data still goes in only via the web UI or the ERP sync job.</li>
+      <li>Use <code>metric=invoiced</code> on any volume endpoint to get invoiced quantity instead of produced volume — same underlying data as the Analytics page's Production/Invoiced toggle.</li>
+      <li>Responses are sent with <code>Cache-Control: no-store</code> — the underlying data changes throughout the day, so don't cache client-side without your own expiry logic.</li>
+      <li>A GET request to a bare URL without the <code>/r4x8e</code> prefix will <code>302</code> redirect to the prefixed one. Harmless for testing, but call the prefixed URL directly to save a round trip.</li>
+    </ul>
+  </div>
+
+  <footer>Daily Volume Tracker — internal API documentation</footer>
+</div>
+</body>
+</html>

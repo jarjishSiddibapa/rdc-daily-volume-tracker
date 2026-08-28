@@ -1,0 +1,1064 @@
+{% extends "base.html" %}
+{% block title %}Analytics — Daily Volume Tracker{% endblock %}
+{% block page_title %}Production Analytics{% endblock %}
+
+{% block content %}
+<style>
+/* ════════════════════════════════════════════════════════════════
+   ANALYTICS PAGE
+   ════════════════════════════════════════════════════════════════ */
+
+.act-card { padding: 0; }
+
+/* ── Tab bar ──────────────────────────────────────────────────── */
+.act-tab-bar {
+    display: flex;
+    border-bottom: 2px solid var(--border);
+    padding: 0 20px;
+}
+.act-tab {
+    display: flex; align-items: center; gap: 7px;
+    padding: 14px 18px;
+    border: none; background: none;
+    color: var(--text-muted); font-size: 0.88rem; font-weight: 600;
+    cursor: pointer;
+    border-bottom: 3px solid transparent; margin-bottom: -2px;
+    border-radius: 6px 6px 0 0;
+    transition: color 0.15s, border-color 0.15s;
+}
+.act-tab .material-icons-round { font-size: 18px; }
+.act-tab:hover { color: var(--text-primary); }
+.act-tab.active { color: var(--accent-blue); border-bottom-color: var(--accent-blue); }
+
+/* ── Section blocks ───────────────────────────────────────────── */
+.act-section { padding: 20px 20px 18px; }
+.act-section + .act-section { border-top: 1px solid var(--border); }
+.act-slabel {
+    font-size: 0.69rem; font-weight: 800;
+    text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--text-muted); margin-bottom: 12px;
+    display: flex; align-items: center; gap: 6px;
+}
+.act-slabel .material-icons-round { font-size: 14px; }
+.act-slabel-hint {
+    font-size: 0.7rem; font-weight: 400;
+    text-transform: none; letter-spacing: 0; font-style: italic; opacity: 0.8;
+}
+
+/* ── Preset chips ─────────────────────────────────────────────── */
+.act-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.act-chip {
+    padding: 5px 14px;
+    border: 1px solid var(--border); border-radius: 20px;
+    background: none; color: var(--text-muted);
+    font-size: 0.8rem; font-weight: 600; cursor: pointer;
+    transition: all 0.15s;
+}
+.act-chip:hover { border-color: var(--accent-blue); color: var(--accent-blue); }
+.act-chip.chip-active { background: var(--accent-blue); border-color: var(--accent-blue); color: #fff; }
+
+/* ── Date pickers row ─────────────────────────────────────────── */
+.act-date-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.act-date-field { display: flex; flex-direction: column; gap: 4px; }
+.act-date-field-label {
+    font-size: 0.7rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted);
+}
+.act-date-field .form-control { width: 148px; }
+.act-arrow { color: var(--text-muted); font-size: 20px; margin-top: 18px; flex-shrink: 0; }
+.act-hint { font-size: 0.72rem; color: var(--text-muted); margin-top: 18px; font-style: italic; }
+
+/* ── Footer row ───────────────────────────────────────────────── */
+.act-footer {
+    display: flex; flex-wrap: wrap; align-items: flex-end; gap: 20px;
+    padding: 18px 20px 20px;
+    border-top: 1px solid var(--border);
+    background: rgba(0,0,0,0.015);
+    border-radius: 0 0 var(--radius) var(--radius);
+}
+[data-theme="dark"] .act-footer { background: rgba(255,255,255,0.02); }
+.act-pf-group { min-width: 200px; }
+.act-check-label {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 0.85rem; color: var(--text-secondary);
+    cursor: pointer; user-select: none; white-space: nowrap;
+}
+.act-check-label input[type="checkbox"] {
+    cursor: pointer; accent-color: var(--accent-blue); width: 15px; height: 15px;
+}
+
+/* ── Plant filter trigger button ──────────────────────────────── */
+.act-pf-trigger {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 16px;
+    border: 1.5px solid var(--border); border-radius: 8px;
+    background: var(--surface); color: var(--text-secondary);
+    font-size: 0.86rem; font-weight: 500; cursor: pointer;
+    transition: all 0.15s; white-space: nowrap;
+}
+.act-pf-trigger .material-icons-round { font-size: 18px; flex-shrink: 0; }
+.act-pf-trigger .pf-label { flex: 1; min-width: 120px; }
+.act-pf-trigger:hover { border-color: var(--accent-blue); color: var(--text-primary); }
+.act-pf-trigger.pf-filtered {
+    border-color: var(--accent-blue); background: rgba(59,130,246,0.07); color: var(--accent-blue);
+}
+.act-pf-trigger.pf-none {
+    border-color: var(--accent-orange); background: rgba(245,158,11,0.07); color: var(--accent-orange);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   PLANT FILTER MODAL
+   ════════════════════════════════════════════════════════════════ */
+.pf-overlay {
+    position: fixed; inset: 0; z-index: 9000;
+    background: rgba(0,0,0,0.5);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+    opacity: 0; visibility: hidden;
+    transition: opacity 0.2s, visibility 0.2s;
+}
+.pf-overlay.pf-open { opacity: 1; visibility: visible; }
+
+.pf-modal {
+    /* Same solid background as every card on the site */
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 28px 80px rgba(0,0,0,0.35);
+    width: 600px; max-width: 96vw; max-height: 90vh;
+    display: flex; flex-direction: column; overflow: hidden;
+    transform: translateY(16px) scale(0.97);
+    transition: transform 0.22s cubic-bezier(0.34,1.56,0.64,1);
+}
+.pf-overlay.pf-open .pf-modal { transform: translateY(0) scale(1); }
+
+/* Header */
+.pf-mhdr {
+    display: flex; align-items: center; gap: 14px;
+    padding: 18px 20px 16px;
+    border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.pf-mhdr-icon {
+    width: 40px; height: 40px; border-radius: 10px;
+    background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.2);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.pf-mhdr-icon .material-icons-round { font-size: 22px; color: var(--accent-blue); }
+.pf-mhdr-text { flex: 1; }
+.pf-mhdr-text h4 { margin: 0; font-size: 1.02rem; font-weight: 700; }
+.pf-mhdr-text p  { margin: 3px 0 0; font-size: 0.78rem; color: var(--text-muted); }
+.pf-mclose {
+    width: 34px; height: 34px; border: none; background: none;
+    color: var(--text-muted); cursor: pointer; border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.12s, color 0.12s; flex-shrink: 0;
+}
+.pf-mclose:hover { background: rgba(239,68,68,0.1); color: var(--accent-red); }
+
+/* Search */
+.pf-msearch {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border); flex-shrink: 0;
+    background: var(--bg-card);
+}
+.pf-msearch .material-icons-round { font-size: 20px; color: var(--text-muted); flex-shrink: 0; }
+.pf-msearch input {
+    flex: 1; border: none; background: transparent;
+    color: var(--text-primary); font-size: 0.9rem; outline: none;
+}
+.pf-msearch input::placeholder { color: var(--text-muted); }
+
+/* Toolbar */
+.pf-mtoolbar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 20px;
+    border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.pf-mtally { font-size: 0.82rem; color: var(--text-muted); flex: 1; }
+.pf-mtally strong { color: var(--accent-blue); font-size: 0.9rem; }
+.pf-maction {
+    padding: 5px 14px;
+    border: 1px solid var(--border); border-radius: 16px;
+    background: none; color: var(--text-muted);
+    font-size: 0.78rem; font-weight: 700; cursor: pointer;
+    transition: all 0.12s;
+}
+.pf-maction:hover { border-color: var(--accent-blue); color: var(--accent-blue); }
+
+/* Scrollable body */
+.pf-mbody {
+    flex: 1; overflow-y: auto;
+    scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+}
+.pf-mbody::-webkit-scrollbar { width: 5px; }
+.pf-mbody::-webkit-scrollbar-track { background: transparent; }
+.pf-mbody::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+/* Footer */
+.pf-mfooter {
+    display: flex; align-items: center; gap: 10px;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-card); flex-shrink: 0;
+}
+.pf-mfooter-info { font-size: 0.8rem; color: var(--text-muted); }
+
+/* ── Custom checkbox — fully visible in both themes ───────────── */
+.pf-cb {
+    appearance: none; -webkit-appearance: none;
+    width: 17px; height: 17px; flex-shrink: 0;
+    border: 2px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-card);
+    cursor: pointer; pointer-events: none;
+    position: relative;
+    transition: border-color 0.12s, background 0.12s;
+}
+/* Checked state */
+.pf-cb:checked {
+    background: var(--accent-blue);
+    border-color: var(--accent-blue);
+}
+.pf-cb:checked::after {
+    content: '';
+    position: absolute;
+    left: 4px; top: 1px;
+    width: 5px; height: 9px;
+    border: 2.5px solid #fff;
+    border-top: none; border-left: none;
+    transform: rotate(43deg);
+}
+/* Indeterminate state (region partially selected) */
+.pf-cb:indeterminate {
+    background: var(--accent-blue);
+    border-color: var(--accent-blue);
+}
+.pf-cb:indeterminate::after {
+    content: '';
+    position: absolute;
+    left: 3px; top: 6px;
+    width: 7px; height: 2.5px;
+    background: #fff; border-radius: 2px;
+}
+
+/* ── Region rows ──────────────────────────────────────────────── */
+.pf-reg-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 20px; cursor: pointer;
+    background: rgba(59,130,246,0.06);
+    border-bottom: 1px solid var(--border);
+    user-select: none; transition: background 0.12s;
+}
+.pf-reg-row:hover { background: rgba(59,130,246,0.13); }
+.pf-reg-row.sel { background: rgba(59,130,246,0.14); }
+.pf-reg-name {
+    flex: 1; font-size: 0.78rem; font-weight: 800;
+    text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-secondary);
+}
+.pf-reg-badge {
+    font-size: 0.71rem; color: var(--text-muted);
+    background: var(--border); padding: 1px 9px; border-radius: 10px; font-weight: 600;
+}
+
+/* ── Plant rows ───────────────────────────────────────────────── */
+.pf-plt-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 20px 9px 38px; cursor: pointer;
+    font-size: 0.85rem; transition: background 0.1s; user-select: none;
+    border-bottom: 1px solid var(--border);
+}
+.pf-plt-row:hover { background: rgba(59,130,246,0.07); }
+/* Selected plant row gets a clear blue tint */
+.pf-plt-row.sel {
+    background: rgba(59,130,246,0.08);
+}
+.pf-plt-row.sel .pf-plt-name { color: var(--accent-blue); font-weight: 600; }
+.pf-plt-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pf-plt-code { font-size: 0.72rem; color: var(--text-muted); font-family: monospace; flex-shrink: 0; }
+.pf-empty { padding: 36px 20px; text-align: center; color: var(--text-muted); font-size: 0.88rem; }
+
+/* ── Summary banner ───────────────────────────────────────────── */
+.act-summary {
+    display: none; margin: 0; padding: 11px 20px;
+    background: rgba(16,185,129,0.07); border-bottom: 1px solid rgba(16,185,129,0.2);
+    font-size: 0.84rem; color: var(--text-secondary);
+    gap: 6px; align-items: center; flex-wrap: wrap;
+}
+.act-summary.visible { display: flex; }
+.act-summary-kpi {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.2);
+    border-radius: 6px; padding: 3px 10px;
+    font-weight: 700; font-size: 0.88rem; color: var(--accent-green);
+}
+
+/* ── Results table ────────────────────────────────────────────── */
+.analytics-table-wrap { overflow-x: auto; max-height: 65vh; overflow-y: auto; }
+.analytics-table { border-collapse: separate !important; border-spacing: 0 !important; }
+.analytics-table thead th {
+    position: sticky; top: 0; z-index: 2;
+    background: var(--bg-card); /* solid — never transparent */
+}
+.analytics-table th:nth-child(2),
+.analytics-table td:nth-child(2) {
+    position: sticky; left: 0;
+    /* right shadow gives clear visual separation from scrolling content */
+    box-shadow: 3px 0 6px -1px rgba(0,0,0,0.1);
+    border-right: 2px solid var(--border) !important;
+}
+.analytics-table thead th:nth-child(2) { z-index: 4; }
+.analytics-table tbody td:nth-child(2) {
+    z-index: 2;
+    /* prevent long names from wrapping or overflowing into date columns */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 240px;
+}
+.analytics-table td.zero-vol { color: var(--text-muted); font-size: 0.82rem; }
+.act-empty-state {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 56px 20px; color: var(--text-muted); text-align: center; gap: 10px;
+}
+.act-empty-state .material-icons-round { font-size: 44px; opacity: 0.25; }
+.act-empty-state p { font-size: 0.9rem; margin: 0; }
+</style>
+
+<!-- ══════════════════════════════════════════════════════════════
+     Controls card
+     ══════════════════════════════════════════════════════════════ -->
+<div class="card act-card mb-24">
+
+    <div class="act-tab-bar">
+        <button class="act-tab active" id="tabDaywise" onclick="switchAnalyticsTab('daywise')">
+            <span class="material-icons-round">calendar_view_week</span> Day-wise
+        </button>
+        <button class="act-tab" id="tabMonthly" onclick="switchAnalyticsTab('monthly')">
+            <span class="material-icons-round">calendar_month</span> Monthly Summary
+        </button>
+    </div>
+
+    <!-- Period section -->
+    <div class="act-section">
+
+        <div id="dwControls">
+            <div class="act-slabel"><span class="material-icons-round">date_range</span> Period</div>
+            <div class="act-presets" id="dwPresets">
+                <button class="act-chip" onclick="applyDwPreset('last7',this)">Last 7 days</button>
+                <button class="act-chip" onclick="applyDwPreset('last14',this)">Last 14 days</button>
+                <button class="act-chip" onclick="applyDwPreset('last30',this)">Last 30 days</button>
+                <button class="act-chip" onclick="applyDwPreset('thisMonth',this)">This month</button>
+                <button class="act-chip" onclick="applyDwPreset('lastMonth',this)">Last month</button>
+            </div>
+            <div class="act-date-row">
+                <div class="act-date-field">
+                    <span class="act-date-field-label">From</span>
+                    <input type="text" class="form-control" id="dwFrom" placeholder="Start date" readonly>
+                </div>
+                <span class="material-icons-round act-arrow">arrow_forward</span>
+                <div class="act-date-field">
+                    <span class="act-date-field-label">To</span>
+                    <input type="text" class="form-control" id="dwTo" placeholder="End date" readonly>
+                </div>
+                <span class="act-hint">Max 92 days — use Monthly Summary for longer ranges</span>
+            </div>
+        </div>
+
+        <div id="mthControls" style="display:none">
+            <div class="act-slabel"><span class="material-icons-round">date_range</span> Period</div>
+            <div class="act-presets" id="mthPresets">
+                <button class="act-chip" onclick="applyMthPreset('thisYear',this)">This year</button>
+                <button class="act-chip" onclick="applyMthPreset('lastYear',this)">Last year</button>
+                <button class="act-chip" onclick="applyMthPreset('last6',this)">Last 6 months</button>
+                <button class="act-chip" onclick="applyMthPreset('last12',this)">Last 12 months</button>
+                <button class="act-chip" onclick="applyMthPreset('thisMonth',this)">This month</button>
+            </div>
+            <div class="act-date-row">
+                <div class="act-date-field">
+                    <span class="act-date-field-label">From</span>
+                    <input type="text" class="form-control" id="mthFrom" placeholder="Start month" readonly>
+                </div>
+                <span class="material-icons-round act-arrow">arrow_forward</span>
+                <div class="act-date-field">
+                    <span class="act-date-field-label">To</span>
+                    <input type="text" class="form-control" id="mthTo" placeholder="End month" readonly>
+                </div>
+                <span class="act-hint">Up to 36 months</span>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Footer: plants + options + actions -->
+    <div class="act-footer">
+
+        <div class="act-pf-group">
+            <div class="act-slabel" style="margin-bottom:8px">
+                <span class="material-icons-round">factory</span> Plants
+                <span class="act-slabel-hint">— optional filter</span>
+            </div>
+            <button class="act-pf-trigger" id="pfBtn" onclick="_pfOpenModal()">
+                <span class="material-icons-round">tune</span>
+                <span class="pf-label" id="pfLabel">All Plants</span>
+                <span class="material-icons-round" style="font-size:18px;flex-shrink:0">open_in_new</span>
+            </button>
+        </div>
+
+        <div style="flex:1"></div>
+
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:14px">
+            <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+                <label class="act-check-label">
+                    <input type="checkbox" id="hideZero"> Hide plants with no data
+                </label>
+                <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+                    <button class="act-view-btn chip-active" data-view="production"
+                        style="padding:6px 14px;font-size:0.8rem;font-weight:700;border:none;cursor:pointer;
+                               background:var(--accent-blue);color:#fff;transition:all 0.15s;"
+                        onclick="setAnalyticsView('production',this)">Production</button>
+                    <button class="act-view-btn" data-view="invoiced"
+                        style="padding:6px 14px;font-size:0.8rem;font-weight:700;border:none;cursor:pointer;
+                               background:var(--bg-card);color:var(--text-muted);transition:all 0.15s;"
+                        onclick="setAnalyticsView('invoiced',this)">Invoiced</button>
+                </div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+                <button class="btn btn-primary" style="padding:10px 22px" onclick="loadAnalytics()">
+                    <span class="material-icons-round">bar_chart</span> Load Report
+                </button>
+                <button class="btn btn-success btn-sm" id="exportBtn" style="display:none" onclick="exportAnalytics()">
+                    <span class="material-icons-round">file_download</span> Export Excel
+                </button>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     Results card
+     ══════════════════════════════════════════════════════════════ -->
+<div class="card" style="padding:0;overflow:hidden">
+    <div class="card-header" style="padding:16px 20px">
+        <h3 id="analyticsTitle" style="margin:0">Results</h3>
+        <span class="text-sm text-muted" id="analyticsInfo"></span>
+    </div>
+    <div class="act-summary" id="analyticsBanner"></div>
+    <div class="table-container analytics-table-wrap" style="padding:0">
+        <table class="data-table analytics-table">
+            <thead id="analyticsHead">
+                <tr><td colspan="3">
+                    <div class="act-empty-state">
+                        <span class="material-icons-round">bar_chart</span>
+                        <p>Select a period above and click <strong>Load Report</strong></p>
+                    </div>
+                </td></tr>
+            </thead>
+            <tbody id="analyticsBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     Plant-filter modal  (outside any card — no overflow clipping)
+     ══════════════════════════════════════════════════════════════ -->
+<div class="pf-overlay" id="pfOverlay" onclick="_pfOverlayClick(event)">
+<div class="pf-modal" id="pfModal">
+
+    <!-- Header -->
+    <div class="pf-mhdr">
+        <div class="pf-mhdr-icon"><span class="material-icons-round">factory</span></div>
+        <div class="pf-mhdr-text">
+            <h4>Select Plants</h4>
+            <p id="pfModalSubtitle">Choose which plants to include in the report</p>
+        </div>
+        <button class="pf-mclose" onclick="_pfCloseModal()" title="Cancel">
+            <span class="material-icons-round">close</span>
+        </button>
+    </div>
+
+    <!-- Search -->
+    <div class="pf-msearch">
+        <span class="material-icons-round">search</span>
+        <input type="text" id="pfSearch" placeholder="Search by name or plant code…"
+            oninput="_pfMRender(this.value)" autocomplete="off">
+    </div>
+
+    <!-- Toolbar -->
+    <div class="pf-mtoolbar">
+        <span class="pf-mtally" id="pfTally">Loading…</span>
+        <button class="pf-maction" onclick="_pfMSelectAll()">Select All</button>
+        <button class="pf-maction" onclick="_pfMClearAll()">Clear All</button>
+    </div>
+
+    <!-- Scrollable plant list -->
+    <div class="pf-mbody" id="pfModalBody">
+        <div class="pf-empty">
+            <div class="spinner" style="width:22px;height:22px;margin:0 auto 10px"></div>
+            Loading plants…
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="pf-mfooter">
+        <span class="pf-mfooter-info" id="pfFooterInfo"></span>
+        <div style="display:flex;gap:10px">
+            <button class="btn btn-outline btn-sm" onclick="_pfCloseModal()">Cancel</button>
+            <button class="btn btn-primary btn-sm" onclick="_pfApplyModal()">
+                <span class="material-icons-round">check</span> Apply Selection
+            </button>
+        </div>
+    </div>
+
+</div>
+</div>
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+// ══════════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════════
+let _analyticsTab = 'daywise';
+let _analyticsView = 'production'; // 'production' | 'invoiced'
+let _lastAnalyticsData = null;
+let _dwFpFrom, _dwFpTo, _mthFpFrom, _mthFpTo;
+
+// Committed plant selection (used when building API calls)
+// null = all plants   Set = specific plant codes
+let _pfSelected = null;
+
+// Temporary state INSIDE the modal (committed → _pfSelected only on Apply)
+let _pfTemp = null;
+
+let _allPlants  = [];
+let _pfLoaded   = false;
+
+
+// ══════════════════════════════════════════════════════════════════
+// TAB SWITCHING
+// ══════════════════════════════════════════════════════════════════
+function switchAnalyticsTab(tab) {
+    _analyticsTab = tab;
+    document.getElementById('tabDaywise').classList.toggle('active', tab === 'daywise');
+    document.getElementById('tabMonthly').classList.toggle('active', tab === 'monthly');
+    document.getElementById('dwControls').style.display  = tab === 'daywise'  ? '' : 'none';
+    document.getElementById('mthControls').style.display = tab === 'monthly'  ? '' : 'none';
+    _resetResults();
+}
+
+function _resetResults() {
+    document.getElementById('analyticsHead').innerHTML = `<tr><td colspan="3">
+        <div class="act-empty-state">
+            <span class="material-icons-round">bar_chart</span>
+            <p>Select a period above and click <strong>Load Report</strong></p>
+        </div></td></tr>`;
+    document.getElementById('analyticsBody').innerHTML = '';
+    document.getElementById('analyticsTitle').textContent = 'Results';
+    document.getElementById('analyticsInfo').textContent  = '';
+    document.getElementById('analyticsBanner').classList.remove('visible');
+    document.getElementById('exportBtn').style.display = 'none';
+    _lastAnalyticsData = null;
+}
+
+function setAnalyticsView(view, btn) {
+    _analyticsView = view;
+    document.querySelectorAll('.act-view-btn').forEach(b => {
+        const active = b.dataset.view === view;
+        b.style.background = active ? 'var(--accent-blue)' : 'var(--bg-card)';
+        b.style.color = active ? '#fff' : 'var(--text-muted)';
+    });
+    if (_lastAnalyticsData) renderAnalyticsTable(_lastAnalyticsData);
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+// PRESET CHIPS
+// ══════════════════════════════════════════════════════════════════
+function _setChipActive(id, btn) {
+    document.getElementById(id).querySelectorAll('.act-chip').forEach(b => b.classList.remove('chip-active'));
+    if (btn) btn.classList.add('chip-active');
+}
+
+function applyDwPreset(preset, btn) {
+    const t = new Date(), y = new Date(t); y.setDate(t.getDate()-1);
+    const fd = d => d.toISOString().split('T')[0];
+    let f, to;
+    switch(preset) {
+        case 'last7':     f=new Date(t); f.setDate(t.getDate()-7);  to=y; break;
+        case 'last14':    f=new Date(t); f.setDate(t.getDate()-14); to=y; break;
+        case 'last30':    f=new Date(t); f.setDate(t.getDate()-30); to=y; break;
+        case 'thisMonth': f=new Date(t.getFullYear(),t.getMonth(),1); to=y; break;
+        case 'lastMonth': f=new Date(t.getFullYear(),t.getMonth()-1,1);
+                          to=new Date(t.getFullYear(),t.getMonth(),0); break;
+        default: return;
+    }
+    _dwFpFrom.setDate(fd(f),true); _dwFpTo.setDate(fd(to),true);
+    _setChipActive('dwPresets',btn); loadAnalytics();
+}
+
+function applyMthPreset(preset, btn) {
+    const t = new Date();
+    const fm = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    let f, to;
+    switch(preset) {
+        case 'thisYear':  f=new Date(t.getFullYear(),0,1); to=new Date(t.getFullYear(),t.getMonth(),1); break;
+        case 'lastYear':  f=new Date(t.getFullYear()-1,0,1); to=new Date(t.getFullYear()-1,11,1); break;
+        case 'last6':  { let m=t.getMonth()-5,y=t.getFullYear()+(m<0?-1:0);
+                         f=new Date(y,((m%12)+12)%12,1); to=new Date(t.getFullYear(),t.getMonth(),1); break; }
+        case 'last12': { let m=t.getMonth()-11,y=t.getFullYear()+(m<0?-1:0);
+                         f=new Date(y,((m%12)+12)%12,1); to=new Date(t.getFullYear(),t.getMonth(),1); break; }
+        case 'thisMonth': f=to=new Date(t.getFullYear(),t.getMonth(),1); break;
+        default: return;
+    }
+    _mthFpFrom.setDate(fm(f),true); _mthFpTo.setDate(fm(to),true);
+    _setChipActive('mthPresets',btn); loadAnalytics();
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+// PLANT FILTER — MODAL
+// ══════════════════════════════════════════════════════════════════
+
+// ── Load plant list once ──────────────────────────────────────────
+async function _pfEnsureLoaded() {
+    if (_pfLoaded) return;
+    try {
+        const data = await apiCall('/api/plants');
+        _allPlants = (data.plants || []).filter(p => p.is_active);
+        _pfLoaded  = true;
+    } catch(e) {
+        document.getElementById('pfModalBody').innerHTML =
+            '<div class="pf-empty" style="color:var(--accent-red)">Failed to load plants. Refresh and try again.</div>';
+    }
+}
+
+// ── Open modal ────────────────────────────────────────────────────
+async function _pfOpenModal() {
+    // Clone current committed selection into temp state
+    _pfTemp = _pfSelected === null ? null : new Set(_pfSelected);
+
+    document.getElementById('pfOverlay').classList.add('pf-open');
+    document.getElementById('pfSearch').value = '';
+
+    await _pfEnsureLoaded();
+    _pfMRender('');
+    setTimeout(() => document.getElementById('pfSearch').focus(), 80);
+}
+
+// ── Close without applying ────────────────────────────────────────
+function _pfCloseModal() {
+    document.getElementById('pfOverlay').classList.remove('pf-open');
+    _pfTemp = null;
+}
+
+// ── Click on overlay backdrop closes modal ────────────────────────
+function _pfOverlayClick(e) {
+    if (e.target === document.getElementById('pfOverlay')) _pfCloseModal();
+}
+
+// ── Apply: commit temp → selected, update button ──────────────────
+function _pfApplyModal() {
+    _pfSelected = _pfTemp === null ? null : new Set(_pfTemp);
+    _pfUpdateBtn();
+    _pfCloseModal();
+}
+
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') _pfCloseModal();
+});
+
+// ── Helpers ───────────────────────────────────────────────────────
+function _pfTempIsChecked(code) {
+    return _pfTemp === null || _pfTemp.has(code);
+}
+
+function _pfUpdateBtn() {
+    const btn   = document.getElementById('pfBtn');
+    const label = document.getElementById('pfLabel');
+    const n     = _allPlants.length;
+    btn.classList.remove('pf-filtered','pf-none');
+    if (_pfSelected === null) {
+        label.textContent = n ? `All ${n} Plants` : 'All Plants';
+    } else if (_pfSelected.size === 0) {
+        label.textContent = 'No Plants Selected';
+        btn.classList.add('pf-none');
+    } else {
+        label.textContent = `${_pfSelected.size} of ${n} Plants`;
+        btn.classList.add('pf-filtered');
+    }
+}
+
+// ── Render modal list ─────────────────────────────────────────────
+function _pfMRender(query) {
+    const body = document.getElementById('pfModalBody');
+    if (!_pfLoaded) return;
+
+    const q = query.toLowerCase().trim();
+    const filtered = _allPlants.filter(p =>
+        !q ||
+        (p.daily_tracker_name||'').toLowerCase().includes(q) ||
+        (p.erp_name||'').toLowerCase().includes(q) ||
+        p.plant_code.toLowerCase().includes(q)
+    );
+
+    if (!filtered.length) {
+        body.innerHTML = '<div class="pf-empty">No plants match your search.</div>';
+        _pfMUpdateTally(); return;
+    }
+
+    const byRegion = {}, regionOrder = [];
+    for (const p of filtered) {
+        const r = p.region || 'Unassigned';
+        if (!byRegion[r]) { byRegion[r] = []; regionOrder.push(r); }
+        byRegion[r].push(p);
+    }
+
+    let html = '';
+    for (const region of regionOrder) {
+        const plants = byRegion[region];
+        const allRegSel = plants.every(p => _pfTempIsChecked(p.plant_code));
+        const someRegSel = !allRegSel && plants.some(p => _pfTempIsChecked(p.plant_code));
+        html += `<div class="pf-reg-row${allRegSel?' sel':''}" data-region="${escHtml(region)}">
+            <input type="checkbox" class="pf-cb pf-reg-cb">
+            <span class="pf-reg-name">${escHtml(region)}</span>
+            <span class="pf-reg-badge">${plants.length} plant${plants.length!==1?'s':''}</span>
+        </div>`;
+        for (const p of plants) {
+            const name    = p.daily_tracker_name || p.erp_name || p.plant_code;
+            const checked = _pfTempIsChecked(p.plant_code);
+            html += `<div class="pf-plt-row${checked?' sel':''}" data-code="${escHtml(p.plant_code)}">
+                <input type="checkbox" class="pf-cb pf-plt-cb" ${checked?'checked':''}>
+                <span class="pf-plt-name">${escHtml(name)}</span>
+                <span class="pf-plt-code">${escHtml(p.plant_code)}</span>
+            </div>`;
+        }
+    }
+    body.innerHTML = html;
+
+    // Attach click handlers after render
+    body.querySelectorAll('.pf-reg-row').forEach(row =>
+        row.addEventListener('click', () => _pfMToggleRegion(row.dataset.region))
+    );
+    body.querySelectorAll('.pf-plt-row').forEach(row =>
+        row.addEventListener('click', () => _pfMTogglePlant(row.dataset.code))
+    );
+
+    _pfMUpdateRegionCbs();
+    _pfMUpdateTally();
+}
+
+// ── Toggle a single plant in temp state ───────────────────────────
+function _pfMTogglePlant(code) {
+    if (_pfTemp === null) _pfTemp = new Set(_allPlants.map(p => p.plant_code));
+    _pfTemp.has(code) ? _pfTemp.delete(code) : _pfTemp.add(code);
+    if (_pfTemp.size >= _allPlants.length) _pfTemp = null;
+
+    const checked = _pfTempIsChecked(code);
+    const row = document.querySelector(`.pf-plt-row[data-code="${CSS.escape(code)}"]`);
+    if (row) {
+        row.querySelector('.pf-plt-cb').checked = checked;
+        row.classList.toggle('sel', checked);
+        // Update plant name style
+        const nm = row.querySelector('.pf-plt-name');
+        if (nm) { nm.style.color = checked ? 'var(--accent-blue)' : ''; nm.style.fontWeight = checked ? '600' : ''; }
+    }
+
+    _pfMUpdateRegionCbs();
+    _pfMUpdateTally();
+}
+
+// ── Toggle all plants in a region ────────────────────────────────
+function _pfMToggleRegion(regionName) {
+    const rPlants = _allPlants.filter(p => (p.region||'Unassigned') === regionName);
+    if (_pfTemp === null) _pfTemp = new Set(_allPlants.map(p => p.plant_code));
+
+    const allSel = rPlants.every(p => _pfTemp.has(p.plant_code));
+    allSel
+        ? rPlants.forEach(p => _pfTemp.delete(p.plant_code))
+        : rPlants.forEach(p => _pfTemp.add(p.plant_code));
+    if (_pfTemp.size >= _allPlants.length) _pfTemp = null;
+
+    // Update plant rows in this region
+    document.querySelectorAll('.pf-plt-row').forEach(row => {
+        if (!rPlants.some(p => p.plant_code === row.dataset.code)) return;
+        const checked = _pfTempIsChecked(row.dataset.code);
+        row.querySelector('.pf-plt-cb').checked = checked;
+        row.classList.toggle('sel', checked);
+        const nm = row.querySelector('.pf-plt-name');
+        if (nm) { nm.style.color = checked ? 'var(--accent-blue)' : ''; nm.style.fontWeight = checked ? '600' : ''; }
+    });
+    _pfMUpdateRegionCbs();
+    _pfMUpdateTally();
+}
+
+// ── Select / clear all ────────────────────────────────────────────
+function _pfMSelectAll() {
+    _pfTemp = null;
+    _pfMRender(document.getElementById('pfSearch').value);
+}
+function _pfMClearAll() {
+    _pfTemp = new Set();
+    _pfMRender(document.getElementById('pfSearch').value);
+}
+
+// ── Update region checkbox states ─────────────────────────────────
+function _pfMUpdateRegionCbs() {
+    document.querySelectorAll('.pf-reg-row').forEach(row => {
+        const cb = row.querySelector('.pf-cb');
+        if (!cb) return;
+        const rp  = _allPlants.filter(p => (p.region||'Unassigned') === row.dataset.region);
+        const sel = rp.filter(p => _pfTempIsChecked(p.plant_code)).length;
+        cb.checked       = sel === rp.length;
+        cb.indeterminate = sel > 0 && sel < rp.length;
+        row.classList.toggle('sel', sel === rp.length);
+    });
+}
+
+// ── Update tally in toolbar ───────────────────────────────────────
+function _pfMUpdateTally() {
+    const tally = document.getElementById('pfTally');
+    const footer = document.getElementById('pfFooterInfo');
+    if (!tally) return;
+    const total = _allPlants.length;
+    const sel   = _pfTemp === null ? total : _pfTemp.size;
+    tally.innerHTML = `<strong>${sel}</strong> of ${total} plants selected`;
+    if (footer) {
+        if (_pfTemp === null) {
+            footer.textContent = 'All plants will be included';
+        } else if (_pfTemp.size === 0) {
+            footer.innerHTML = '<span style="color:var(--accent-orange)">No plants selected — select at least one</span>';
+        } else {
+            footer.textContent = `${_pfTemp.size} plant${_pfTemp.size!==1?'s':''} will be included`;
+        }
+    }
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+// API CALL HELPERS
+// ══════════════════════════════════════════════════════════════════
+function _pfGetParam() {
+    // '' = all plants   '&plants=...' = filtered   null = none (block)
+    if (_pfSelected === null) return '';
+    if (_pfSelected.size === 0) return null;
+    return `&plants=${[..._pfSelected].join(',')}`;
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+// LOAD
+// ══════════════════════════════════════════════════════════════════
+async function loadAnalytics() {
+    const body = document.getElementById('analyticsBody');
+    const head = document.getElementById('analyticsHead');
+
+    const pfParam = _pfGetParam();
+    if (pfParam === null) {
+        head.innerHTML = `<tr><td colspan="4"><div class="act-empty-state">
+            <span class="material-icons-round" style="color:var(--accent-orange)">warning_amber</span>
+            <p>No plants selected.<br>Click <strong>Filter Plants → Select All</strong> or choose at least one plant.</p>
+        </div></td></tr>`;
+        document.getElementById('analyticsBody').innerHTML = '';
+        document.getElementById('analyticsBanner').classList.remove('visible');
+        document.getElementById('exportBtn').style.display = 'none';
+        return;
+    }
+
+    head.innerHTML = '';
+    body.innerHTML = `<tr><td colspan="4"><div class="act-empty-state">
+        <div class="spinner" style="width:28px;height:28px;margin:0 auto"></div>
+        <p style="margin-top:6px">Loading data…</p>
+    </div></td></tr>`;
+    document.getElementById('analyticsBanner').classList.remove('visible');
+    document.getElementById('exportBtn').style.display = 'none';
+
+    const hideZero = document.getElementById('hideZero').checked;
+    let url;
+
+    if (_analyticsTab === 'daywise') {
+        const from = document.getElementById('dwFrom').value;
+        const to   = document.getElementById('dwTo').value;
+        if (!from || !to) {
+            body.innerHTML = `<tr><td colspan="4"><div class="act-empty-state">
+                <span class="material-icons-round" style="color:var(--accent-orange)">event</span>
+                <p>Please select <strong>From</strong> and <strong>To</strong> dates.</p></div></td></tr>`;
+            return;
+        }
+        const span = Math.round((new Date(to) - new Date(from)) / 86400000) + 1;
+        if (span > 92) {
+            body.innerHTML = `<tr><td colspan="4"><div class="act-empty-state">
+                <span class="material-icons-round" style="color:var(--accent-orange)">warning_amber</span>
+                <p>Range is <strong>${span} days</strong> — max is 92.<br>
+                Switch to <strong>Monthly Summary</strong> for longer periods.</p></div></td></tr>`;
+            return;
+        }
+        url = `/api/analytics/daywise?from=${from}&to=${to}&hide_zero=${hideZero}${pfParam}`;
+    } else {
+        const from = document.getElementById('mthFrom').value;
+        const to   = document.getElementById('mthTo').value;
+        if (!from || !to) {
+            body.innerHTML = `<tr><td colspan="4"><div class="act-empty-state">
+                <span class="material-icons-round" style="color:var(--accent-orange)">event</span>
+                <p>Please select <strong>From</strong> and <strong>To</strong> months.</p></div></td></tr>`;
+            return;
+        }
+        url = `/api/analytics/monthly?from=${from}-01&to=${to}-01&hide_zero=${hideZero}${pfParam}`;
+    }
+
+    try {
+        const data = await apiCall(url);
+        if (data.error) {
+            body.innerHTML = `<tr><td colspan="4"><div class="act-empty-state">
+                <span class="material-icons-round" style="color:var(--accent-red)">error_outline</span>
+                <p>${escHtml(data.error)}</p></div></td></tr>`;
+            return;
+        }
+        _lastAnalyticsData = data;
+        renderAnalyticsTable(data);
+        document.getElementById('exportBtn').style.display = '';
+    } catch(err) {
+        body.innerHTML = `<tr><td colspan="4"><div class="act-empty-state">
+            <span class="material-icons-round" style="color:var(--accent-red)">wifi_off</span>
+            <p>Failed to load data. Please try again.</p></div></td></tr>`;
+    }
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+// RENDER TABLE
+// ══════════════════════════════════════════════════════════════════
+function renderAnalyticsTable(data) {
+    const head  = document.getElementById('analyticsHead');
+    const body  = document.getElementById('analyticsBody');
+    const isDay = data.type === 'daywise';
+    const cols  = isDay ? data.date_labels : data.month_labels;
+    const n     = cols.length;
+    const inv   = _analyticsView === 'invoiced';
+    const vKey  = inv ? 'invoiced_volumes' : 'volumes';
+    const tKey  = inv ? 'invoiced_total'   : 'total';
+
+    let plantCount = 0;
+    for (const r of data.regions) plantCount += r.plants.length;
+
+    const fromL = isDay ? data.from_date : (data.month_labels[0]||data.from_month);
+    const toL   = isDay ? data.to_date   : (data.month_labels.slice(-1)[0]||data.to_month);
+    const unit  = isDay ? (n===1?'day':'days') : (n===1?'month':'months');
+
+    const viewLabel = inv ? 'Invoiced Qty' : 'Production';
+    document.getElementById('analyticsTitle').textContent =
+        isDay ? `Day-wise ${viewLabel}` : `Monthly ${viewLabel} Summary`;
+    document.getElementById('analyticsInfo').textContent =
+        `${plantCount} plant${plantCount!==1?'s':''} · ${fromL} → ${toL} (${n} ${unit})`;
+
+    const grand  = data.company_total[tKey] || 0;
+    const banner = document.getElementById('analyticsBanner');
+    banner.innerHTML =
+        `<span class="act-summary-kpi">
+            <span class="material-icons-round" style="font-size:16px">${inv ? 'receipt_long' : 'show_chart'}</span>
+            ${Number(grand).toLocaleString('en-IN')} CUM ${inv ? 'invoiced' : 'total'}
+         </span>
+         <span style="color:var(--text-muted)">·</span>
+         ${plantCount} plant${plantCount!==1?'s':''} &nbsp;·&nbsp; ${n} ${unit}` +
+        (_pfSelected !== null && _pfSelected.size > 0
+            ? ` &nbsp;·&nbsp; <span style="color:var(--accent-blue);font-weight:600">filtered: ${_pfSelected.size} of ${_allPlants.length} plants</span>`
+            : '');
+    banner.classList.add('visible');
+
+    head.innerHTML = `<tr>
+        <th style="min-width:36px;width:36px;text-align:center">Sr.</th>
+        <th style="min-width:220px;text-align:left">Plant Name</th>
+        ${cols.map(c=>`<th class="text-right" style="min-width:82px;white-space:nowrap">${escHtml(c)}</th>`).join('')}
+        <th class="text-right" style="min-width:100px">Total</th>
+    </tr>`;
+
+    let html = '', sr = 1;
+    for (const region of data.regions) {
+        for (const plant of region.plants) {
+            const vols = (plant[vKey] || plant.volumes).map(v =>
+                v > 0 ? `<td class="text-right">${fmtDec(v)}</td>`
+                       : `<td class="text-right zero-vol">—</td>`
+            ).join('');
+            html += `<tr>
+                <td style="text-align:center;color:var(--text-muted);font-size:0.8rem">${sr++}</td>
+                <td class="ps">${escHtml(plant.plant_name)}</td>
+                ${vols}
+                <td class="text-right" style="font-weight:700">${fmt(plant[tKey] ?? plant.total)}</td>
+            </tr>`;
+        }
+        if (region.name !== 'Unassigned' && region.subtotal) {
+            const s = region.subtotal;
+            html += `<tr class="region-row">
+                <td></td><td class="rs">${escHtml(region.name)}</td>
+                ${(s[vKey] || s.volumes).map(v=>`<td class="text-right">${fmt(v)}</td>`).join('')}
+                <td class="text-right">${fmt(s[tKey] ?? s.total)}</td>
+            </tr>`;
+        }
+    }
+    const ct = data.company_total;
+    html += `<tr class="total-row">
+        <td></td><td class="ts">COMPANY TOTAL</td>
+        ${(ct[vKey] || ct.volumes).map(v=>`<td class="text-right">${fmt(v)}</td>`).join('')}
+        <td class="text-right">${fmt(ct[tKey] ?? ct.total)}</td>
+    </tr>`;
+    body.innerHTML = html;
+
+    // Sticky column must be fully opaque — semi-transparent colours let scrolled
+    // content bleed through.  Stack the row tint ON TOP of the solid card bg.
+    body.querySelectorAll('.ps').forEach(td =>
+        td.style.background = 'var(--bg-card)');
+    body.querySelectorAll('.rs').forEach(td =>
+        td.style.background = 'linear-gradient(rgba(59,130,246,0.18),rgba(59,130,246,0.18)),var(--bg-card)');
+    body.querySelectorAll('.ts').forEach(td =>
+        td.style.background = 'linear-gradient(rgba(16,185,129,0.12),rgba(16,185,129,0.12)),var(--bg-card)');
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+// EXPORT
+// ══════════════════════════════════════════════════════════════════
+function exportAnalytics() {
+    const p = _pfGetParam();
+    if (p === null) { showToast('No plants selected','error'); return; }
+    const h = document.getElementById('hideZero').checked;
+    const v = `&view=${_analyticsView}`;
+    let url;
+    if (_analyticsTab === 'daywise') {
+        const f = document.getElementById('dwFrom').value, t = document.getElementById('dwTo').value;
+        url = `/api/analytics/daywise/export?from=${f}&to=${t}&hide_zero=${h}${p}${v}`;
+    } else {
+        const f = document.getElementById('mthFrom').value, t = document.getElementById('mthTo').value;
+        url = `/api/analytics/monthly/export?from=${f}-01&to=${t}-01&hide_zero=${h}${p}${v}`;
+    }
+    window.open((window.URL_PREFIX||'')+url,'_blank');
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+// FLATPICKR INIT
+// ══════════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+    _dwFpFrom = flatpickr('#dwFrom', {
+        dateFormat: 'Y-m-d', maxDate: 'today',
+        onChange(s) { if(s[0]) _dwFpTo.set('minDate',s[0]); _setChipActive('dwPresets',null); }
+    });
+    _dwFpTo = flatpickr('#dwTo', {
+        dateFormat: 'Y-m-d', maxDate: 'today',
+        onChange(s) { if(s[0]) _dwFpFrom.set('maxDate',s[0]); _setChipActive('dwPresets',null); }
+    });
+    _mthFpFrom = flatpickr('#mthFrom', {
+        plugins: [new monthSelectPlugin({shorthand:true,dateFormat:'Y-m',altFormat:'M Y'})],
+        onChange() { _setChipActive('mthPresets',null); }
+    });
+    _mthFpTo = flatpickr('#mthTo', {
+        plugins: [new monthSelectPlugin({shorthand:true,dateFormat:'Y-m',altFormat:'M Y'})],
+        onChange() { _setChipActive('mthPresets',null); }
+    });
+
+    applyDwPreset('last7', document.querySelector('#dwPresets .act-chip'));
+});
+</script>
+{% endblock %}

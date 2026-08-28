@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+{% block title %}User Management — Daily Volume Tracker{% endblock %}
+{% block page_title %}User Management{% endblock %}
+
+{% block top_actions %}
+<div class="table-search-wrap">
+    <span class="material-icons-round">search</span>
+    <input type="text" class="form-control" id="userSearch" style="width:180px;" placeholder="Search users…"
+        oninput="_applyUsersFilter()">
+</div>
+<select class="form-control" id="userRoleFilter" style="width:150px;" onchange="_applyUsersFilter()">
+    <option value="">All Roles</option>
+    <option value="admin">Admin</option>
+    <option value="manual_entry">Manual Entry</option>
+    <option value="viewer">Viewer</option>
+</select>
+<button class="btn btn-primary btn-sm" onclick="showAddUserModal()">
+    <span class="material-icons-round">person_add</span> Add User
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <!-- Tab bar -->
+    <div class="user-tab-bar">
+        <button id="tabActiveUsers" class="user-tab user-tab-active" onclick="switchUserTab('active')">
+            <span class="material-icons-round" style="font-size:16px;vertical-align:middle;margin-right:4px;">check_circle</span>
+            Active
+            <span class="user-tab-count" id="activeUsersCount">0</span>
+        </button>
+        <button id="tabInactiveUsers" class="user-tab" onclick="switchUserTab('inactive')">
+            <span class="material-icons-round" style="font-size:16px;vertical-align:middle;margin-right:4px;">block</span>
+            Inactive
+            <span class="user-tab-count" id="inactiveUsersCount">0</span>
+        </button>
+    </div>
+
+    <!-- Active users pane -->
+    <div id="activeUsersPane">
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Display Name</th>
+                        <th>Role</th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="activeUsersBody">
+                    <tr><td colspan="5" class="loading"><div class="spinner"></div><span>Loading...</span></td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div id="activeUsersPagination" style="padding:0 4px;"></div>
+    </div>
+
+    <!-- Inactive users pane -->
+    <div id="inactiveUsersPane" style="display:none;">
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Display Name</th>
+                        <th>Role</th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="inactiveUsersBody">
+                    <tr><td colspan="5" class="loading"><div class="spinner"></div><span>Loading...</span></td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div id="inactiveUsersPagination" style="padding:0 4px;"></div>
+    </div>
+</div>
+
+<!-- Add/Edit User Modal -->
+<div class="modal-overlay" id="userModal">
+    <div class="modal" style="max-width: 520px; max-height: 92vh; display:flex; flex-direction:column;">
+        <div class="modal-header">
+            <h3 id="userModalTitle">Add User</h3>
+            <button class="modal-close" onclick="closeUserModal()">
+                <span class="material-icons-round">close</span>
+            </button>
+        </div>
+        <div class="modal-body" style="flex:1; overflow-y:auto;">
+            <input type="hidden" id="editingUserId" value="">
+            <div class="form-group">
+                <label for="modalUsername">Username</label>
+                <input type="text" class="form-control" id="modalUsername" placeholder="e.g. john.doe"
+                    autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label for="modalEmail">Email</label>
+                <input type="email" class="form-control" id="modalEmail" placeholder="e.g. john@example.com"
+                    autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label for="modalDisplayName">Display Name</label>
+                <input type="text" class="form-control" id="modalDisplayName" placeholder="e.g. John Doe">
+            </div>
+            <div class="form-group">
+                <label for="modalRole">Role</label>
+                <select class="form-control" id="modalRole">
+                    <option value="viewer">Viewer — Read-only access</option>
+                    <option value="manual_entry">Manual Entry — Can enter daily volumes</option>
+                    <option value="admin">Admin — Full access</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="modalPassword" id="passwordLabel">Password</label>
+                <div class="pw-input-wrap">
+                    <input type="password" class="form-control" id="modalPassword" placeholder="Min. 8 characters"
+                        autocomplete="new-password">
+                    <button type="button" class="pw-eye-btn"
+                        onclick="togglePwVisibility('modalPassword','modalPwEyeIcon')" tabindex="-1">
+                        <span class="material-icons-round" id="modalPwEyeIcon">visibility</span>
+                    </button>
+                </div>
+                <span class="text-sm text-muted" id="passwordHint"></span>
+                <!-- Password strength bar -->
+                <div id="modalPwStrengthWrap" style="display:none; margin-top:10px;">
+                    <div style="height:4px; border-radius:2px; background:var(--border); overflow:hidden; margin-bottom:6px;">
+                        <div id="modalPwStrengthFill" style="height:100%; border-radius:2px; width:0%; transition:width 0.3s ease, background-color 0.3s ease;"></div>
+                    </div>
+                    <div id="modalPwStrengthLabel" style="font-size:0.76rem; font-weight:600; margin-bottom:8px;"></div>
+                    <ul style="list-style:none; padding:0; margin:0; display:flex; flex-wrap:wrap; gap:4px 16px;">
+                        <li id="modal-req-len"     class="pw-req">8+ characters</li>
+                        <li id="modal-req-upper"   class="pw-req">Uppercase (A-Z)</li>
+                        <li id="modal-req-lower"   class="pw-req">Lowercase (a-z)</li>
+                        <li id="modal-req-num"     class="pw-req">Number (0-9)</li>
+                        <li id="modal-req-special" class="pw-req">Special character</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="form-group" id="activeGroup" style="display:none;">
+                <label class="flex items-center" style="gap: 12px; cursor: pointer;">
+                    <label class="toggle">
+                        <input type="checkbox" id="modalActive" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span>Account Active</span>
+                </label>
+            </div>
+            <!-- Employee & TM Details access permission -->
+            <div id="empDetailsGroup" style="display:none;">
+                <div style="border-top:1px solid var(--border); margin:8px 0 16px;"></div>
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <label class="toggle">
+                        <input type="checkbox" id="modalCanEditEmp">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <div>
+                        <div style="font-size:0.88rem; font-weight:700; color:var(--text-primary);">
+                            <span class="material-icons-round" style="font-size:16px; vertical-align:middle; margin-right:4px; color:var(--accent-blue);">badge</span>
+                            Employee & TM Details Access
+                        </div>
+                        <div class="text-sm text-muted">Allow this user to view and edit Employee & TM details for all plants.</div>
+                    </div>
+                </div>
+            </div>
+            <!-- Update Targets permission — manual_entry only -->
+            <div id="targetsPermGroup" style="display:none;">
+                <div style="border-top:1px solid var(--border); margin:8px 0 16px;"></div>
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <label class="toggle">
+                        <input type="checkbox" id="modalCanUpdateTargets">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <div>
+                        <div style="font-size:0.88rem; font-weight:700; color:var(--text-primary);">
+                            <span class="material-icons-round" style="font-size:16px; vertical-align:middle; margin-right:4px; color:var(--accent-blue);">track_changes</span>
+                            Update Targets Access
+                        </div>
+                        <div class="text-sm text-muted">Allow this user to update and upload monthly targets for all plants.</div>
+                    </div>
+                </div>
+            </div>
+            <!-- Plant Access — shown only for Manual Entry role -->
+            <div id="plantAccessGroup" style="display:none;">
+                <div style="border-top:1px solid var(--border); margin:8px 0 16px;"></div>
+                <div style="margin-bottom:12px;">
+                    <div style="font-size:0.88rem; font-weight:700; color:var(--text-primary); margin-bottom:3px;">
+                        <span class="material-icons-round" style="font-size:16px; vertical-align:middle; margin-right:4px; color:var(--accent-blue);">edit_note</span>
+                        Manual Entry — Plant Access
+                    </div>
+                    <div class="text-sm text-muted">Choose which plants this user can submit daily volumes for.</div>
+                </div>
+                <!-- Scope selector -->
+                <div class="access-scope-selector" style="margin-bottom:14px;">
+                    <button type="button" id="btnAllPlants" class="scope-btn scope-active" onclick="setAccessScope('all')">
+                        <span class="material-icons-round" style="font-size:17px;">select_all</span>
+                        All Plants
+                    </button>
+                    <button type="button" id="btnSpecificPlants" class="scope-btn" onclick="setAccessScope('specific')">
+                        <span class="material-icons-round" style="font-size:17px;">checklist</span>
+                        Specific Plants
+                    </button>
+                </div>
+                <!-- Specific plants list (hidden when "All Plants" is active) -->
+                <div id="plantAccessListWrap" style="display:none;">
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                        <div style="position:relative; flex:1;">
+                            <span class="material-icons-round" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); font-size:18px; color:var(--text-muted); pointer-events:none;">search</span>
+                            <input type="text" class="form-control" id="plantAccessSearch"
+                                placeholder="Search by name, code, or region…"
+                                oninput="filterPlantAccessList()"
+                                style="padding-left:36px;">
+                        </div>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; padding:0 2px;">
+                        <span style="font-size:0.78rem; color:var(--text-muted);" id="plantSelectionCount"></span>
+                        <div style="display:flex; gap:14px;">
+                            <button type="button" onclick="selectAllPlants(true)"
+                                style="background:none; border:none; font-size:0.78rem; color:var(--accent-blue); cursor:pointer; padding:0; font-weight:500;">Select all</button>
+                            <button type="button" onclick="selectAllPlants(false)"
+                                style="background:none; border:none; font-size:0.78rem; color:var(--text-muted); cursor:pointer; padding:0; font-weight:500;">Clear</button>
+                        </div>
+                    </div>
+                    <div id="plantAccessItems"
+                        style="max-height:240px; overflow-y:auto; border:1px solid var(--border); border-radius:10px; background:var(--bg-secondary);">
+                        <div style="padding:16px; text-align:center; color:var(--text-muted); font-size:0.85rem;">Loading plants…</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeUserModal()">Cancel</button>
+            <button class="btn btn-primary" id="saveUserBtn" onclick="saveUser()">Save User</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+    /* Password strength */
+    .pw-req { font-size:0.75rem; display:flex; align-items:center; gap:5px; color:var(--text-muted); transition:color 0.2s; }
+    .pw-req::before { content:'○'; font-size:0.68rem; }
+    .pw-req.pw-req-met { color:#16a34a; }
+    .pw-req.pw-req-met::before { content:'●'; }
+    #saveUserBtn:disabled { opacity:0.45; cursor:not-allowed; pointer-events:none; }
+
+    /* Active / Inactive user tabs */
+    .user-tab-bar { display:flex; border-bottom:1px solid var(--border); }
+    .user-tab { flex:0 0 auto; padding:12px 24px; background:none; border:none; border-bottom:3px solid transparent; margin-bottom:-1px; cursor:pointer; font-size:0.875rem; font-weight:500; color:var(--text-secondary); display:flex; align-items:center; gap:6px; transition:color 0.15s, border-color 0.15s; }
+    .user-tab:hover { color:var(--text-primary); }
+    .user-tab.user-tab-active { color:var(--accent-blue); border-bottom-color:var(--accent-blue); font-weight:700; }
+    .user-tab-count { display:inline-flex; align-items:center; justify-content:center; min-width:22px; height:20px; padding:0 6px; border-radius:10px; font-size:0.72rem; font-weight:700; background:var(--bg-secondary); color:var(--text-muted); }
+    .user-tab.user-tab-active .user-tab-count { background:rgba(59,130,246,0.15); color:var(--accent-blue); }
+
+    /* Scope selector (All Plants / Specific Plants) */
+    .access-scope-selector { display:flex; border:1px solid rgba(59,130,246,0.35); border-radius:10px; overflow:hidden; }
+    .scope-btn { flex:1; padding:9px 12px; background:transparent; border:none; color:var(--text-secondary); cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; font-size:0.85rem; font-weight:500; transition:all 0.2s; }
+    .scope-btn:not(.scope-active):hover { background:rgba(59,130,246,0.08); color:var(--text-primary); }
+    .scope-btn.scope-active { background:var(--accent-blue); color:#fff; font-weight:600; }
+    .scope-btn:first-child { border-right:1px solid rgba(59,130,246,0.35); }
+
+    /* Plant checklist items */
+    .plant-access-item { display:flex; align-items:center; gap:10px; padding:8px 12px; cursor:pointer; border-bottom:1px solid var(--border); transition:background 0.12s; }
+    .plant-access-item:last-child { border-bottom:none; }
+    .plant-access-item:hover { background:rgba(59,130,246,0.1); }
+    .plant-access-item.is-checked { background:rgba(59,130,246,0.08); }
+    .plant-access-item input[type="checkbox"] { accent-color:var(--accent-blue); width:16px; height:16px; flex-shrink:0; cursor:pointer; }
+    .plant-access-item .pa-code { flex-shrink:0; min-width:44px; text-align:center; font-size:0.78rem; font-weight:600; color:var(--text-muted); }
+    .plant-access-item .pa-name { flex:1; font-size:0.875rem; color:var(--text-primary); }
+    .plant-access-item .pa-region { font-size:0.72rem; color:var(--text-muted); background:var(--bg-card); border:1px solid var(--border); padding:2px 7px; border-radius:20px; white-space:nowrap; flex-shrink:0; }
+</style>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        loadUsers();
+
+        document.getElementById('modalPassword').addEventListener('input', function () {
+            const pw = this.value;
+            renderPasswordStrength(pw, _MODAL_PW_IDS);
+            _updateModalSaveBtn(pw);
+        });
+
+        document.getElementById('modalRole').addEventListener('change', function () {
+            const role = this.value;
+            const isManualEntry = role === 'manual_entry';
+            // Plant access — manual_entry only
+            document.getElementById('plantAccessGroup').style.display = isManualEntry ? 'block' : 'none';
+            if (isManualEntry) {
+                const userId = document.getElementById('editingUserId').value || null;
+                _loadUserPlantAccess(userId);
+            }
+            // Employee details permission — non-admin only
+            document.getElementById('empDetailsGroup').style.display = role !== 'admin' ? 'block' : 'none';
+            // Targets permission — manual_entry only; clear checkbox when hidden
+            document.getElementById('targetsPermGroup').style.display = isManualEntry ? 'block' : 'none';
+            if (!isManualEntry) document.getElementById('modalCanUpdateTargets').checked = false;
+        });
+    });
+</script>
+{% endblock %}

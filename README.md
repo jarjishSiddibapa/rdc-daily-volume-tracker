@@ -83,7 +83,7 @@ The included Waitress entry point listens on port `8089`:
 python server.py
 ```
 
-On Windows, double-click `start-all.bat` to launch the production-style server. The launcher always switches to the repository directory, verifies `.env`, creates `venv` when needed, installs missing dependencies, starts `server.py`, and writes launcher output to `Logs/launcher.log`. The older `start_app.bat` remains as a compatible alias.
+On Windows, double-click `start-all.bat` to launch the production-style server. If `.env` is missing, the launcher creates it from `.env.example` and generates a strong `FLASK_SECRET_KEY`. It pauses the first run until the placeholder MySQL settings are replaced, because starting production with example credentials would be unsafe. It also creates `venv` when needed, installs missing dependencies, starts `server.py`, and writes launcher output to `Logs/launcher.log`. The older `start_app.bat` remains as a compatible alias.
 
 For Windows Task Scheduler, set **Program/script** to the absolute path of `start-all.bat`. The script handles its working directory, so **Start in** is optional. Configure the task to run whether the user is logged on or not and choose **Do not start a new instance** if the task is already running. The task remains active while Waitress and the optional in-process scheduler are running.
 

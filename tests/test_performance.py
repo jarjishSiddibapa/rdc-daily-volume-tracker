@@ -59,4 +59,6 @@ class StartupAndLoadingContractTests(TestCase):
     def test_windows_launcher_uses_project_directory_and_production_server(self):
         launcher = (Path(__file__).parents[1] / "start-all.bat").read_text(encoding="utf-8")
         self.assertIn('cd /d "%~dp0"', launcher)
+        self.assertIn('copy /Y ".env.example" ".env"', launcher)
+        self.assertIn("secrets.token_hex(32)", launcher)
         self.assertIn('"venv\\Scripts\\python.exe" server.py', launcher)

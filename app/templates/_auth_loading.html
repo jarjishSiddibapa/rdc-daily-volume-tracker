@@ -1,4 +1,7 @@
-<div class="page-progress" aria-hidden="true"><span></span></div>
+<div class="page-progress" id="pageProgress" role="progressbar" aria-label="Loading" aria-hidden="true">
+    <span class="page-progress-bar"></span>
+    <span class="page-progress-message" role="status" aria-live="polite">One sec… pretending this is very complicated 😎</span>
+</div>
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         var root = document.documentElement;
@@ -8,6 +11,7 @@
             form.addEventListener('submit', function () {
                 activeButton = form.querySelector('button[type="submit"]');
                 root.classList.add('is-loading');
+                document.getElementById('pageProgress').setAttribute('aria-hidden', 'false');
                 if (activeButton) {
                     activeButton.classList.add('is-busy');
                     activeButton.disabled = true;
@@ -20,12 +24,14 @@
             link.addEventListener('click', function (event) {
                 if (!event.defaultPrevented && link.origin === window.location.origin) {
                     root.classList.add('is-loading');
+                    document.getElementById('pageProgress').setAttribute('aria-hidden', 'false');
                 }
             });
         });
 
         window.addEventListener('pageshow', function () {
             root.classList.remove('is-loading');
+            document.getElementById('pageProgress').setAttribute('aria-hidden', 'true');
             if (activeButton) {
                 activeButton.classList.remove('is-busy');
                 activeButton.disabled = false;

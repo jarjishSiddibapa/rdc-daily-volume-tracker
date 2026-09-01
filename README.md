@@ -83,7 +83,11 @@ The included Waitress entry point listens on port `8089`:
 python server.py
 ```
 
-On Windows, `start_app.bat` launches the same server using the repository's `venv`. For an internet-facing deployment, place the app behind an HTTPS reverse proxy and set `SESSION_COOKIE_SECURE=true`.
+On Windows, double-click `start-all.bat` to launch the production-style server. The launcher always switches to the repository directory, verifies `.env`, creates `venv` when needed, installs missing dependencies, starts `server.py`, and writes launcher output to `Logs/launcher.log`. The older `start_app.bat` remains as a compatible alias.
+
+For Windows Task Scheduler, set **Program/script** to the absolute path of `start-all.bat`. The script handles its working directory, so **Start in** is optional. Configure the task to run whether the user is logged on or not and choose **Do not start a new instance** if the task is already running. The task remains active while Waitress and the optional in-process scheduler are running.
+
+For an internet-facing deployment, place the app behind an HTTPS reverse proxy and set `SESSION_COOKIE_SECURE=true`.
 
 The defaults are intentionally conservative for a server that hosts multiple applications: four Waitress threads, a five-connection SQLAlchemy pool, no per-request access-log writes, and a 10-second bounded report cache. Tune these values only after measuring concurrent usage.
 

@@ -50,10 +50,16 @@ python server.py
 Windows helper:
 
 ```text
-start_app.bat
+start-all.bat
 ```
 
 The application listens on port `8089` and uses the `/r4x8e` path prefix by default. Confirm the health of the deployment by opening `/r4x8e/login` and checking the server log before enabling scheduled email or backup jobs.
+
+### Windows Task Scheduler
+
+Use the repository-root `start-all.bat` as the task's **Program/script**. It resolves the project directory itself, validates `.env`, prepares a missing virtual environment, installs missing dependencies, and runs the Waitress `server.py` entry point in the foreground. Keeping the server in the foreground lets Task Scheduler correctly track whether the application is still running.
+
+In the task settings, select **Do not start a new instance** when the task is already running. The launcher records startup failures and redirected server output in `Logs/launcher.log`; the application continues to write its normal rotating log to `Logs/server.log`.
 
 ## Shared-server sizing
 

@@ -1,10 +1,4 @@
 @echo off
-setlocal
-cd /d "%~dp0"
-
-if not exist "venv\Scripts\python.exe" (
-    echo Virtual environment not found. Run: python -m venv venv
-    exit /b 1
-)
-
-"venv\Scripts\python.exe" server.py
+rem Backwards-compatible alias. Use start-all.bat for new shortcuts and tasks.
+call "%~dp0start-all.bat"
+exit /b %ERRORLEVEL%

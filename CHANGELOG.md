@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added a one-click `start-all.bat` launcher designed for Windows Task Scheduler.
+- Added a lightweight, delayed loading-status message alongside the progress animation.
 - Added versioned long-term caching and low-CPU gzip for static and dynamic assets.
 - Reduced shared-server footprint with configurable Waitress threads, database pool limits, and selective request logging.
 - Added a bounded, invalidated report cache for burst dashboard/report traffic.

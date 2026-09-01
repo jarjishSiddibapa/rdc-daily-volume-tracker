@@ -47,3 +47,16 @@ class TemplateSyntaxTests(TestCase):
         for template in template_dir.glob("*.html"):
             with self.subTest(template=template.name):
                 environment.parse(template.read_text(encoding="utf-8"))
+
+
+class StartupAndLoadingContractTests(TestCase):
+    def test_loading_message_is_present_on_app_and_auth_pages(self):
+        root = Path(__file__).parents[1]
+        message = "One sec… pretending this is very complicated 😎"
+        self.assertIn(message, (root / "app" / "templates" / "base.html").read_text(encoding="utf-8"))
+        self.assertIn(message, (root / "app" / "templates" / "_auth_loading.html").read_text(encoding="utf-8"))
+
+    def test_windows_launcher_uses_project_directory_and_production_server(self):
+        launcher = (Path(__file__).parents[1] / "start-all.bat").read_text(encoding="utf-8")
+        self.assertIn('cd /d "%~dp0"', launcher)
+        self.assertIn('"venv\\Scripts\\python.exe" server.py', launcher)

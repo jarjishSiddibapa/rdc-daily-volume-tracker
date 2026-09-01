@@ -5,6 +5,7 @@ import logging
 
 from logging.handlers import TimedRotatingFileHandler
 from waitress import serve
+from flask import g, request
 
 from app import create_app
 
@@ -57,15 +58,33 @@ if not logger.handlers:
 # REQUEST LOGGING
 # =========================================================
 
-@app.before_request
-def log_request_info():
-    from flask import request
+LOG_ALL_REQUESTS = os.getenv("LOG_ALL_REQUESTS", "false").lower() == "true"
+SLOW_REQUEST_MS = int(os.getenv("SLOW_REQUEST_MS", "750"))
 
-    logger.info(
-        f"{request.remote_addr} "
-        f"{request.method} "
-        f"{request.path}"
-    )
+
+@app.before_request
+def start_request_timer():
+    if request.endpoint != "static":
+        g._request_started_at = time.perf_counter()
+
+
+@app.after_request
+def log_relevant_requests(response):
+    started_at = g.get("_request_started_at")
+    if started_at is None:
+        return response
+
+    elapsed_ms = round((time.perf_counter() - started_at) * 1000)
+    if LOG_ALL_REQUESTS or response.status_code >= 400 or elapsed_ms >= SLOW_REQUEST_MS:
+        logger.info(
+            "%s %s %s %s %sms",
+            request.remote_addr,
+            request.method,
+            request.path,
+            response.status_code,
+            elapsed_ms,
+        )
+    return response
 
 # =========================================================
 # HEARTBEAT THREAD
@@ -84,24 +103,28 @@ if __name__ == "__main__":
 
     try:
 
+        host = os.getenv("APP_HOST", "0.0.0.0")
+        port = int(os.getenv("APP_PORT", "8089"))
+        threads = int(os.getenv("WAITRESS_THREADS", "4"))
+
         logger.info("=" * 60)
         logger.info("SERVER STARTING...")
         logger.info("Application started successfully.")
-        logger.info("Running on: http://0.0.0.0:8089")
+        logger.info("Running on: http://%s:%s", host, port)
         logger.info("=" * 60)
 
-        heartbeat_thread = threading.Thread(
-            target=heartbeat,
-            daemon=True
-        )
-
-        heartbeat_thread.start()
+        if os.getenv("HEARTBEAT_ENABLED", "false").lower() == "true":
+            heartbeat_thread = threading.Thread(
+                target=heartbeat,
+                daemon=True
+            )
+            heartbeat_thread.start()
 
         serve(
             app,
-            host="0.0.0.0",
-            port=8089,
-            threads=8
+            host=host,
+            port=port,
+            threads=threads,
         )
 
     except Exception as e:

@@ -6,6 +6,7 @@ from app import db
 from app.models import Plant
 from app.decorators import admin_required
 from app.services.audit import log_action
+from app.services.report_generator import invalidate_report_cache
 
 plants_bp = Blueprint("plants", __name__)
 
@@ -62,6 +63,7 @@ def api_add_plant():
 
     try:
         db.session.commit()
+        invalidate_report_cache()
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": str(exc)}), 500
@@ -100,6 +102,7 @@ def api_update_plant(plant_code):
 
     try:
         db.session.commit()
+        invalidate_report_cache()
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": str(exc)}), 500
@@ -129,6 +132,7 @@ def api_delete_plant(plant_code):
     try:
         db.session.delete(plant)
         db.session.commit()
+        invalidate_report_cache()
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": str(exc)}), 500
@@ -158,6 +162,7 @@ def api_reorder_plants():
 
     try:
         db.session.commit()
+        invalidate_report_cache()
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": str(exc)}), 500

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}DB Backup — Daily Volume Tracker{% endblock %}
+{% block title %}DB Backup - Daily Volume Tracker{% endblock %}
 {% block page_title %}Database Backup{% endblock %}
 
 {% block top_actions %}
@@ -78,19 +78,19 @@
     <div class="kpi-grid" style="margin-bottom:24px">
         <div class="kpi-card blue">
             <span class="kpi-label">Status</span>
-            <span class="kpi-value" id="statusVal" style="font-size:1rem">—</span>
+            <span class="kpi-value" id="statusVal" style="font-size:1rem">-</span>
         </div>
         <div class="kpi-card green">
             <span class="kpi-label">Scheduled Times</span>
-            <span class="kpi-value" id="timesVal" style="font-size:0.88rem;line-height:1.4">—</span>
+            <span class="kpi-value" id="timesVal" style="font-size:0.88rem;line-height:1.4">-</span>
         </div>
         <div class="kpi-card orange">
             <span class="kpi-label">Max Backups Kept</span>
-            <span class="kpi-value" id="maxVal" style="font-size:1rem">—</span>
+            <span class="kpi-value" id="maxVal" style="font-size:1rem">-</span>
         </div>
         <div class="kpi-card purple">
             <span class="kpi-label">Files on Disk</span>
-            <span class="kpi-value" id="countVal" style="font-size:1rem">—</span>
+            <span class="kpi-value" id="countVal" style="font-size:1rem">-</span>
         </div>
     </div>
 
@@ -275,7 +275,7 @@ function applySettings(s) {
 
     // KPI cards
     document.getElementById('statusVal').textContent = s.is_enabled ? 'Scheduled' : 'Off';
-    document.getElementById('maxVal').textContent    = s.max_backups || '—';
+    document.getElementById('maxVal').textContent    = s.max_backups || '-';
 }
 
 function toggleEnabled() {
@@ -347,7 +347,7 @@ async function loadHistory() {
 
         if (!list.length) {
             tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--text-muted)">
-                No backups yet — click <strong>Take Backup Now</strong> to create one.</td></tr>`;
+                No backups yet. Click <strong>Take Backup Now</strong> to create one.</td></tr>`;
             return;
         }
 

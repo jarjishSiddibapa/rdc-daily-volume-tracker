@@ -13,6 +13,7 @@ from app.models import Plant, PlantDailyVolume, UserPlantAccess
 from app.decorators import manual_entry_required
 from app.services.audit import log_action
 from app.services.volume_helpers import recalc_monthly_volumes_batch
+from app.services.report_generator import invalidate_report_cache
 
 _IST = pytz.timezone('Asia/Kolkata')
 _logger = logging.getLogger(__name__)
@@ -185,6 +186,7 @@ def api_submit_daily_volume():
         for m_start, plant_codes in months_to_recalc.items():
             recalc_monthly_volumes_batch(m_start, list(plant_codes))
         db.session.commit()
+        invalidate_report_cache()
     except Exception as exc:
         db.session.rollback()
         _logger.error(f"Monthly recalc failed after manual entry: {exc}")

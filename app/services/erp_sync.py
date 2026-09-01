@@ -10,6 +10,7 @@ from app.models import Plant, PlantDailyVolume
 from app.oracle_service import fetch_erp_daily_production, fetch_erp_daily_invoiced
 from app.services.audit import log_action
 from app.services.volume_helpers import recalc_monthly_volumes_batch
+from app.services.report_generator import invalidate_report_cache
 
 logger = logging.getLogger(__name__)
 
@@ -190,6 +191,7 @@ def sync_erp_data() -> dict:
     # ── Commit everything ────────────────────────────────────────────────
     try:
         db.session.commit()
+        invalidate_report_cache()
     except Exception as exc:
         db.session.rollback()
         return {"status": "error", "message": f"Database commit failed: {str(exc)}"}

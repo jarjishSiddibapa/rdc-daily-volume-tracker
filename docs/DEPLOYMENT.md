@@ -53,7 +53,27 @@ Windows helper:
 start_app.bat
 ```
 
-The application listens on port `8089` and uses the `/r4x8e` path prefix. Confirm the health of the deployment by opening `/r4x8e/login` and checking the server log before enabling scheduled email or backup jobs.
+The application listens on port `8089` and uses the `/r4x8e` path prefix by default. Confirm the health of the deployment by opening `/r4x8e/login` and checking the server log before enabling scheduled email or backup jobs.
+
+## Shared-server sizing
+
+Start with the provided defaults:
+
+```dotenv
+WAITRESS_THREADS=4
+DB_POOL_SIZE=5
+DB_MAX_OVERFLOW=5
+REPORT_CACHE_SECONDS=10
+LOG_ALL_REQUESTS=false
+SLOW_REQUEST_MS=750
+HEARTBEAT_ENABLED=false
+```
+
+Four threads match Waitress's conservative footprint and are sufficient for typical internal dashboard concurrency. Increase threads only when measurement shows queued requests and the database still has connection headroom. Keep the database pool bounded across all applications on the host.
+
+Static assets are fingerprinted and cached for one year. Flask-Compress provides low-level gzip when Waitress is served directly. If a reverse proxy performs compression, it may own compression instead, but verify `Content-Encoding` and avoid compressing the same response twice.
+
+`SCHEDULER_ENABLED` must be `true` in exactly one instance of this application. Set it to `false` in additional instances to prevent duplicate jobs.
 
 ## Reverse proxy checklist
 
@@ -63,6 +83,8 @@ The application listens on port `8089` and uses the `/r4x8e` path prefix. Confir
 4. Preserve the `/r4x8e` prefix; do not expose the application directly on a public interface.
 5. Rotate the Flask, MySQL, Oracle, and SMTP credentials independently.
 6. Configure filesystem permissions for `Logs/` and `database-backup/`.
+7. Enable gzip or Brotli at the proxy and verify caching for `/static/` responses.
+8. Monitor slow requests at the `SLOW_REQUEST_MS` threshold before increasing worker or pool sizes.
 
 ## First boot
 

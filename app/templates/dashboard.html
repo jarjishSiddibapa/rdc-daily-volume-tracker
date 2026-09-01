@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Dashboard — Daily Volume Tracker{% endblock %}
+{% block title %}Dashboard - Daily Volume Tracker{% endblock %}
 {% block page_title %}Dashboard{% endblock %}
 
 {% block top_actions %}
 <input type="text" class="form-control" id="reportDate" style="width: 170px;" placeholder="Select date" readonly>
-<button class="btn btn-primary btn-sm" onclick="loadDashboard()">
+<button class="btn btn-primary btn-sm" onclick="loadDashboard({ force: true })">
     <span class="material-icons-round">refresh</span> Refresh
 </button>
 {% if current_user.role in ('admin', 'manual_entry') %}
@@ -24,37 +24,37 @@
 <div class="kpi-grid" id="kpiGrid">
     <div class="kpi-card blue">
         <span class="kpi-label">Yesterday's Production Volume</span>
-        <span class="kpi-value" id="kpiDaily">—</span>
+        <span class="kpi-value" id="kpiDaily">-</span>
         <span class="kpi-sub">CUM</span>
     </div>
     <div class="kpi-card teal">
         <span class="kpi-label">Yesterday's Invoiced Volume</span>
-        <span class="kpi-value" id="kpiInvoiced">—</span>
+        <span class="kpi-value" id="kpiInvoiced">-</span>
         <span class="kpi-sub">CUM</span>
     </div>
     <div class="kpi-card green">
         <span class="kpi-label">MTD Volume</span>
-        <span class="kpi-value" id="kpiMTD">—</span>
+        <span class="kpi-value" id="kpiMTD">-</span>
         <span class="kpi-sub">CUM</span>
     </div>
     <div class="kpi-card purple">
         <span class="kpi-label">Extrapolated</span>
-        <span class="kpi-value" id="kpiExtrap">—</span>
+        <span class="kpi-value" id="kpiExtrap">-</span>
         <span class="kpi-sub">CUM</span>
     </div>
     <div class="kpi-card orange">
         <span class="kpi-label">Target</span>
-        <span class="kpi-value" id="kpiTarget">—</span>
+        <span class="kpi-value" id="kpiTarget">-</span>
         <span class="kpi-sub">CUM</span>
     </div>
     <div class="kpi-card cyan">
         <span class="kpi-label">% vs Budget</span>
-        <span class="kpi-value" id="kpiBudget">—</span>
+        <span class="kpi-value" id="kpiBudget">-</span>
         <span class="kpi-sub" id="kpiBudgetSub"></span>
     </div>
     <div class="kpi-card red">
         <span class="kpi-label">Active Plants</span>
-        <span class="kpi-value" id="kpiPlants">—</span>
+        <span class="kpi-value" id="kpiPlants">-</span>
         <span class="kpi-sub" id="kpiVolPlant"></span>
     </div>
 </div>

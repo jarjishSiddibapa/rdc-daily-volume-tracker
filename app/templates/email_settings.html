@@ -412,7 +412,7 @@ function removeAlertTime(index) {
     window._alertTimes.splice(index, 1);
     if (window._alertTimes.length === 0) {
         window._alertTimes.push('18:00');
-        showToast('At least one time is required — reset to 6:00 PM', 'info');
+        showToast('At least one time is required. Reset to 6:00 PM.', 'info');
     }
     renderAlertTimes();
 }
@@ -455,7 +455,7 @@ function removeReportTime(index) {
     window._reportTimes.splice(index, 1);
     if (window._reportTimes.length === 0) {
         window._reportTimes.push('18:00');
-        showToast('At least one time is required — reset to 6:00 PM', 'info');
+        showToast('At least one time is required. Reset to 6:00 PM.', 'info');
     }
     renderReportTimes();
 }

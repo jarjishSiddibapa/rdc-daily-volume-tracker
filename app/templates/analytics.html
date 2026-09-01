@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Analytics — Daily Volume Tracker{% endblock %}
+{% block title %}Analytics - Daily Volume Tracker{% endblock %}
 {% block page_title %}Production Analytics{% endblock %}
 
 {% block content %}
@@ -362,7 +362,7 @@
                     <span class="act-date-field-label">To</span>
                     <input type="text" class="form-control" id="dwTo" placeholder="End date" readonly>
                 </div>
-                <span class="act-hint">Max 92 days — use Monthly Summary for longer ranges</span>
+                <span class="act-hint">Max 92 days. Use Monthly Summary for longer ranges.</span>
             </div>
         </div>
 
@@ -397,7 +397,7 @@
         <div class="act-pf-group">
             <div class="act-slabel" style="margin-bottom:8px">
                 <span class="material-icons-round">factory</span> Plants
-                <span class="act-slabel-hint">— optional filter</span>
+                <span class="act-slabel-hint">Optional filter</span>
             </div>
             <button class="act-pf-trigger" id="pfBtn" onclick="_pfOpenModal()">
                 <span class="material-icons-round">tune</span>
@@ -830,7 +830,7 @@ function _pfMUpdateTally() {
         if (_pfTemp === null) {
             footer.textContent = 'All plants will be included';
         } else if (_pfTemp.size === 0) {
-            footer.innerHTML = '<span style="color:var(--accent-orange)">No plants selected — select at least one</span>';
+            footer.innerHTML = '<span style="color:var(--accent-orange)">No plants selected. Select at least one.</span>';
         } else {
             footer.textContent = `${_pfTemp.size} plant${_pfTemp.size!==1?'s':''} will be included`;
         }
@@ -892,7 +892,7 @@ async function loadAnalytics() {
         if (span > 92) {
             body.innerHTML = `<tr><td colspan="4"><div class="act-empty-state">
                 <span class="material-icons-round" style="color:var(--accent-orange)">warning_amber</span>
-                <p>Range is <strong>${span} days</strong> — max is 92.<br>
+                <p>Range is <strong>${span} days</strong>. The maximum is 92.<br>
                 Switch to <strong>Monthly Summary</strong> for longer periods.</p></div></td></tr>`;
             return;
         }
@@ -980,7 +980,7 @@ function renderAnalyticsTable(data) {
         for (const plant of region.plants) {
             const vols = (plant[vKey] || plant.volumes).map(v =>
                 v > 0 ? `<td class="text-right">${fmtDec(v)}</td>`
-                       : `<td class="text-right zero-vol">—</td>`
+                       : `<td class="text-right zero-vol">-</td>`
             ).join('');
             html += `<tr>
                 <td style="text-align:center;color:var(--text-muted);font-size:0.8rem">${sr++}</td>

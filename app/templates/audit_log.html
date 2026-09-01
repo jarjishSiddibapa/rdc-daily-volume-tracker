@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Audit Log — Daily Volume Tracker{% endblock %}
+{% block title %}Audit Log - Daily Volume Tracker{% endblock %}
 {% block page_title %}Audit Log{% endblock %}
 
 {% block top_actions %}
@@ -81,7 +81,7 @@
             const logs = data.logs;
 
             document.getElementById('auditInfo').textContent =
-                `${data.total} entries — Page ${data.page} of ${data.pages}`;
+                `${data.total} entries. Page ${data.page} of ${data.pages}`;
 
             if (logs.length === 0) {
                 body.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-muted)">No audit entries found</td></tr>';
@@ -104,10 +104,10 @@
 
             let html = '';
             for (const log of logs) {
-                const ts = log.created_at ? new Date(log.created_at).toLocaleString() : '—';
+                const ts = log.created_at ? new Date(log.created_at).toLocaleString() : '-';
                 const badge = actionBadges[log.action] || 'badge-blue';
                 const actionLabel = log.action.replace(/_/g, ' ');
-                let details = '—';
+                let details = '-';
                 if (log.details) {
                     try {
                         const d = JSON.parse(log.details);
@@ -124,7 +124,7 @@
                     <td><strong>${escHtml(log.username)}</strong></td>
                     <td><span class="badge ${badge}">${actionLabel}</span></td>
                     <td class="text-sm">${details}</td>
-                    <td class="text-sm text-muted">${escHtml(log.ip_address || '—')}</td>
+                    <td class="text-sm text-muted">${escHtml(log.ip_address || '-')}</td>
                 </tr>`;
             }
             body.innerHTML = html;

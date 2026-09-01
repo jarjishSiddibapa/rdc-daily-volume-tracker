@@ -4,10 +4,11 @@ import os
 import secrets
 from datetime import timedelta
 from urllib.parse import quote_plus
-from flask import Flask, session, request as flask_request, g
+from flask import Flask, session, request as flask_request, g, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, current_user
 from flask_bcrypt import Bcrypt
+from flask_compress import Compress
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -15,6 +16,7 @@ load_dotenv()
 db = SQLAlchemy()
 login_manager = LoginManager()
 bcrypt = Bcrypt()
+compress = Compress()
 
 
 def create_app():
@@ -42,7 +44,22 @@ def create_app():
         f"{os.getenv('MYSQL_DB', 'daily_volume_tracker')}"
     )
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+        # Keep a small, healthy pool. This app shares its host with other services,
+        # so bounded connections are preferable to a larger process footprint.
+        "pool_pre_ping": True,
+        "pool_recycle": int(os.getenv("DB_POOL_RECYCLE_SECONDS", "1800")),
+        "pool_size": int(os.getenv("DB_POOL_SIZE", "5")),
+        "max_overflow": int(os.getenv("DB_MAX_OVERFLOW", "5")),
+        "pool_timeout": int(os.getenv("DB_POOL_TIMEOUT_SECONDS", "10")),
+    }
     app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB upload
+
+    # Low-CPU gzip substantially reduces HTML, JSON, CSS, and JavaScript transfer
+    # size. A reverse proxy may still take over this job in larger deployments.
+    app.config["COMPRESS_ALGORITHM"] = ["gzip"]
+    app.config["COMPRESS_LEVEL"] = 4
+    app.config["COMPRESS_MIN_SIZE"] = 1024
 
     # ── Session Security ─────────────────────────────────────────────────
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(minutes=10)
@@ -55,6 +72,7 @@ def create_app():
     # ── Extensions ───────────────────────────────────────────────────────
     db.init_app(app)
     bcrypt.init_app(app)
+    compress.init_app(app)
 
     login_manager.init_app(app)
     login_manager.login_view = "auth.login_page"
@@ -67,10 +85,24 @@ def create_app():
         from app.models import User
         return db.session.get(User, int(user_id))
 
+    def static_asset(filename):
+        """Return a cache-safe static URL versioned by the file modification time."""
+        path = os.path.join(app.static_folder, filename.replace("/", os.sep))
+        try:
+            version = str(int(os.path.getmtime(path)))
+        except OSError:
+            version = "1"
+        return url_for("static", filename=filename, v=version)
+
+    app.jinja_env.globals["static_asset"] = static_asset
+
     # ── Security middleware ───────────────────────────────────────────────
     @app.before_request
     def _security_before():
-        session.permanent = True  # Reset the 10-min inactivity timer
+        # Static requests must not touch the signed session. Apart from avoiding a
+        # needless cookie write, this avoids a user lookup for every CSS/JS asset.
+        if flask_request.endpoint != "static":
+            session.permanent = True  # Reset the 10-min inactivity timer
 
     @app.after_request
     def _security_headers(response):
@@ -98,9 +130,12 @@ def create_app():
             response.headers["Strict-Transport-Security"] = (
                 "max-age=31536000; includeSubDomains"
             )
-        # Prevent caching of authenticated pages (back button leak) and
-        # token-authenticated API responses (may contain business data)
-        if current_user.is_authenticated or g.get("api_token") is not None:
+        # Fingerprinted static assets contain no user data and can be cached for a
+        # year. Dynamic authenticated responses remain strictly non-cacheable.
+        if flask_request.endpoint == "static":
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            response.headers.pop("Pragma", None)
+        elif current_user.is_authenticated or g.get("api_token") is not None:
             response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
             response.headers["Pragma"] = "no-cache"
         return response
@@ -148,7 +183,8 @@ def create_app():
         _migrate_plant_display_order()
 
     # ── Schedule daily zero-volume email at 6 PM IST ─────────────────────
-    _start_scheduler(app)
+    if os.getenv("SCHEDULER_ENABLED", "true").lower() == "true":
+        _start_scheduler(app)
 
     # ── URL obfuscation: all routes behind a non-obvious prefix ──────────
     app.wsgi_app = _PrefixMiddleware(app.wsgi_app, prefix="/r4x8e")

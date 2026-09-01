@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Employee & TM Details — Daily Volume Tracker{% endblock %}
+{% block title %}Employee & TM Details - Daily Volume Tracker{% endblock %}
 {% block page_title %}Employee & TM Details{% endblock %}
 
 {% block content %}
@@ -185,7 +185,7 @@ async function uploadEmpBulk(input) {
 
         loadEmpDetails();   // refresh table
     } catch (err) {
-        showToast('Upload failed — network error', 'error');
+        showToast('Upload failed because of a network error.', 'error');
     } finally {
         label.style.opacity = '';
         label.style.pointerEvents = '';
@@ -206,7 +206,7 @@ function _showUploadReport(data) {
         html += `<p style="font-weight:600;margin-bottom:4px;color:var(--text-muted);">Skipped (${data.skipped.length}):</p>
                  <ul style="margin:0 0 10px;padding-left:18px;">`;
         for (const s of data.skipped) {
-            html += `<li><strong>${escHtml(s.plant_code)}</strong> — ${escHtml(s.reason)}</li>`;
+            html += `<li><strong>${escHtml(s.plant_code)}</strong>: ${escHtml(s.reason)}</li>`;
         }
         html += `</ul>`;
     }
@@ -215,7 +215,7 @@ function _showUploadReport(data) {
         html += `<p style="font-weight:600;margin-bottom:4px;color:var(--accent-red);">Errors (${data.errors.length}):</p>
                  <ul style="margin:0;padding-left:18px;">`;
         for (const e of data.errors) {
-            html += `<li><strong>${escHtml(e.plant_code)}</strong> — ${escHtml(e.reason)}</li>`;
+            html += `<li><strong>${escHtml(e.plant_code)}</strong>: ${escHtml(e.reason)}</li>`;
         }
         html += `</ul>`;
     }
@@ -274,7 +274,7 @@ async function loadEmpDetails() {
 
                 const updatedInfo = p.updated_at
                     ? `<span style="font-size:11px;">${escHtml(p.updated_at)}</span><br><span style="font-size:10px;color:var(--text-muted);">by ${escHtml(p.updated_by)}</span>`
-                    : '<span style="color:var(--text-muted);font-size:12px;">—</span>';
+                    : '<span style="color:var(--text-muted);font-size:12px;">-</span>';
 
                 const actionsCell = _canEdit
                     ? `<td style="text-align:center;">
@@ -305,13 +305,13 @@ async function loadEmpDetails() {
         // Grand total row
         const totalColspan = _canEdit ? '' : '';
         html += `<tr class="total-row">
-            <td style="text-align:center;">—</td>
+            <td style="text-align:center;">-</td>
             <td colspan="2">COMPANY TOTAL</td>
             <td style="text-align:center;">${grandOnRoll}</td>
             <td style="text-align:center;">${grandTeamlease}</td>
             <td style="text-align:center;" class="emp-total-col">${grandOnRoll + grandTeamlease}</td>
             <td style="text-align:center;">${grandTm}</td>
-            <td style="text-align:center;">—</td>
+            <td style="text-align:center;">-</td>
             ${_canEdit ? '<td></td>' : ''}
         </tr>`;
 

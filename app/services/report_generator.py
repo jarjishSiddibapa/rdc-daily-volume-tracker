@@ -9,10 +9,13 @@ Groups plants by region with subtotals and a Company Total row.
 """
 
 import logging
+import os
 import time as _time
+from collections import OrderedDict
 from datetime import date, timedelta
 from calendar import monthrange
 from decimal import Decimal
+from threading import RLock
 
 from sqlalchemy import func
 
@@ -35,6 +38,11 @@ REGION_ORDER = [
 _region_cache: tuple = (0.0, None)  # (monotonic_timestamp, list_of_region_names)
 _REGION_CACHE_TTL = 3600  # 1 hour
 
+_report_cache = OrderedDict()
+_report_cache_lock = RLock()
+_REPORT_CACHE_TTL = max(0, int(os.getenv("REPORT_CACHE_SECONDS", "10")))
+_REPORT_CACHE_MAX_DATES = 16
+
 
 def invalidate_region_cache():
     """Force the next get_region_order() call to re-query the DB.
@@ -42,6 +50,7 @@ def invalidate_region_cache():
     """
     global _region_cache
     _region_cache = (0.0, None)
+    invalidate_report_cache()
 
 
 def get_region_order():
@@ -108,7 +117,36 @@ def _pct_variation(current: float, previous: float) -> str:
     return f"{round(((current - previous) / previous) * 100)}%"
 
 
-def generate_report(report_date: date = None) -> dict:
+def invalidate_report_cache():
+    """Clear the short-lived report cache after a known data mutation."""
+    with _report_cache_lock:
+        _report_cache.clear()
+
+
+def generate_report(report_date: date = None, use_cache: bool = True) -> dict:
+    """Return a report, coalescing repeated requests for the same date."""
+    requested_date = report_date or date.today()
+    if not use_cache or _REPORT_CACHE_TTL == 0:
+        return _generate_report_uncached(requested_date)
+
+    now = _time.monotonic()
+    with _report_cache_lock:
+        cached = _report_cache.get(requested_date)
+        if cached and now - cached[0] < _REPORT_CACHE_TTL:
+            _report_cache.move_to_end(requested_date)
+            return cached[1]
+
+        # Holding this lock also coalesces a burst of identical dashboard/report
+        # requests into one database calculation instead of duplicating the work.
+        report = _generate_report_uncached(requested_date)
+        _report_cache[requested_date] = (_time.monotonic(), report)
+        _report_cache.move_to_end(requested_date)
+        while len(_report_cache) > _REPORT_CACHE_MAX_DATES:
+            _report_cache.popitem(last=False)
+        return report
+
+
+def _generate_report_uncached(report_date: date = None) -> dict:
     """
     Generate the full report for a given date.
 

@@ -1,0 +1,36 @@
+<div class="page-progress" aria-hidden="true"><span></span></div>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var root = document.documentElement;
+        var activeButton = null;
+
+        document.querySelectorAll('form').forEach(function (form) {
+            form.addEventListener('submit', function () {
+                activeButton = form.querySelector('button[type="submit"]');
+                root.classList.add('is-loading');
+                if (activeButton) {
+                    activeButton.classList.add('is-busy');
+                    activeButton.disabled = true;
+                    activeButton.setAttribute('aria-busy', 'true');
+                }
+            });
+        });
+
+        document.querySelectorAll('a[href]').forEach(function (link) {
+            link.addEventListener('click', function (event) {
+                if (!event.defaultPrevented && link.origin === window.location.origin) {
+                    root.classList.add('is-loading');
+                }
+            });
+        });
+
+        window.addEventListener('pageshow', function () {
+            root.classList.remove('is-loading');
+            if (activeButton) {
+                activeButton.classList.remove('is-busy');
+                activeButton.disabled = false;
+                activeButton.removeAttribute('aria-busy');
+            }
+        });
+    });
+</script>

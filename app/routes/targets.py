@@ -10,6 +10,7 @@ from app.models import Plant, PlantMonthlyTarget
 from app.services.excel_service import parse_target_excel
 from app.decorators import admin_required, manual_entry_required, targets_required
 from app.services.audit import log_action
+from app.services.report_generator import invalidate_report_cache
 
 targets_bp = Blueprint("targets", __name__)
 
@@ -68,6 +69,7 @@ def api_get_targets(month_str):
                 db.session.add(new_t)
             try:
                 db.session.commit()
+                invalidate_report_cache()
             except Exception:
                 db.session.rollback()
                 # Concurrent request may have won the race — re-fetch instead of returning empty
@@ -267,6 +269,7 @@ def api_update_targets():
 
     try:
         db.session.commit()
+        invalidate_report_cache()
     except Exception as exc:
         db.session.rollback()
         return jsonify({"error": f"Database error: {str(exc)}"}), 500
@@ -299,6 +302,7 @@ def api_upload_targets():
     status_code = 200 if result["status"] == "success" else 400
 
     if result["status"] == "success":
+        invalidate_report_cache()
         log_action("target_upload", {"month": month_str, "file": file.filename})
         db.session.commit()
 

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
+{% set _uses_flatpickr = request.endpoint in ('dashboard.index', 'dashboard.report_page', 'targets.targets_page', 'analytics.analytics_page') %}
 <script>
     // Apply saved theme immediately to prevent flash
     (function () {
@@ -13,14 +14,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Daily Volume Tracker{% endblock %}</title>
     <meta name="description" content="Daily production volume tracker for all plants across regions">
+    <meta name="theme-color" content="#0b0f1d">
+    <link rel="icon" type="image/svg+xml" href="{{ static_asset('favicon.svg') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
         rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ static_asset('css/style.css') }}">
+    {% if _uses_flatpickr %}
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <link rel="stylesheet" id="fpThemeLink" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/light.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/plugins/monthSelect/style.css">
     <script>
         // Switch flatpickr theme immediately if dark mode is saved, before the
         // rest of the page loads — prevents the calendar flashing the wrong theme.
@@ -31,9 +36,13 @@
             }
         })();
     </script>
+    {% endif %}
 </head>
 
 <body>
+    <div class="page-progress" id="pageProgress" role="progressbar" aria-label="Loading" aria-hidden="true">
+        <span></span>
+    </div>
     <!-- Sidebar Navigation -->
     <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
@@ -205,11 +214,11 @@
             // Tab-close logout is handled by app.js (more robust implementation)
         })();
     </script>
+    {% if _uses_flatpickr %}
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/plugins/monthSelect/index.js"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/plugins/monthSelect/style.css">
-    <script src="https://cdn.jsdelivr.net/npm/lenis@1/dist/lenis.min.js"></script>
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    {% endif %}
+    <script src="{{ static_asset('js/app.js') }}"></script>
     {% block scripts %}{% endblock %}
 </body>
 

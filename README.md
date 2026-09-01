@@ -85,6 +85,8 @@ python server.py
 
 On Windows, `start_app.bat` launches the same server using the repository's `venv`. For an internet-facing deployment, place the app behind an HTTPS reverse proxy and set `SESSION_COOKIE_SECURE=true`.
 
+The defaults are intentionally conservative for a server that hosts multiple applications: four Waitress threads, a five-connection SQLAlchemy pool, no per-request access-log writes, and a 10-second bounded report cache. Tune these values only after measuring concurrent usage.
+
 ## Configuration
 
 All runtime configuration is read from `.env`.
@@ -99,6 +101,14 @@ All runtime configuration is read from `.env`.
 | `ORACLE_HOST`, `ORACLE_PORT`, `ORACLE_SERVICE` | Oracle ERP connection settings |
 | `ORACLE_CLIENT_PATH` | Optional Instant Client path for thick mode |
 | `ADMIN_INITIAL_PASSWORD` | Initial password used only when seeding the first admin |
+| `APP_HOST`, `APP_PORT` | Waitress bind address and port |
+| `WAITRESS_THREADS` | Request worker threads; defaults to `4` |
+| `DB_POOL_SIZE`, `DB_MAX_OVERFLOW` | Bounded MySQL connection pool limits |
+| `DB_POOL_RECYCLE_SECONDS`, `DB_POOL_TIMEOUT_SECONDS` | MySQL connection health settings |
+| `REPORT_CACHE_SECONDS` | Short in-process cache for repeated report requests |
+| `SCHEDULER_ENABLED` | Enables the email, ERP, and backup scheduler in this process |
+| `LOG_ALL_REQUESTS`, `SLOW_REQUEST_MS` | Optional access logging and slow-request threshold |
+| `HEARTBEAT_ENABLED` | Enables the optional hourly heartbeat thread |
 
 Email and backup schedules are configured from the application's admin pages after startup.
 
@@ -152,6 +162,15 @@ Prefix middleware (/r4x8e)
 ```
 
 See the [architecture guide](docs/ARCHITECTURE.md) for the detailed request and data flows.
+
+## Performance approach
+
+- Static CSS, JavaScript, and the favicon use content-versioned URLs and one-year browser caching.
+- HTML, JSON, CSS, JavaScript, and SVG responses use low-CPU gzip compression.
+- Flatpickr loads only on the four pages that use a date or month picker.
+- Dashboard and report requests share a small, invalidated, 10-second in-process cache.
+- Navigation and API actions show immediate progress and button feedback without continuous animation work.
+- The application stays on Flask. The rationale and migration threshold are documented in [ADR 0001](docs/adr/0001-retain-flask-optimize-runtime.md).
 
 ## Security notes
 

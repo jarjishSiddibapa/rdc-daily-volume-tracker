@@ -40,7 +40,10 @@ def api_dashboard():
     else:
         report_date = date.today()
 
-    report = generate_report(report_date)
+    report = generate_report(
+        report_date,
+        use_cache=request.args.get("refresh") != "1",
+    )
     return jsonify(report)
 
 
@@ -57,7 +60,10 @@ def api_report():
     else:
         report_date = date.today()
 
-    report = generate_report(report_date)
+    report = generate_report(
+        report_date,
+        use_cache=request.args.get("refresh") != "1",
+    )
     return jsonify(report)
 
 

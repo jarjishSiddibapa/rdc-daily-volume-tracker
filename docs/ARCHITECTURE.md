@@ -22,7 +22,16 @@ app/
 3. Web routes use Flask-Login and role decorators. API routes use `Authorization: Bearer <token>` and always return JSON errors.
 4. Route handlers call focused service modules for calculations, exports, synchronization, email, or backup work.
 5. SQLAlchemy reads and writes MySQL. Oracle queries are isolated in `oracle_service.py` and are used by the ERP synchronization service.
-6. Responses include security headers; authenticated and token-authenticated responses disable browser caching.
+6. Responses include security headers; authenticated and token-authenticated dynamic responses disable browser caching.
+7. Versioned static assets are cached for one year and compressible responses use low-CPU gzip.
+
+## Performance model
+
+The primary request path is synchronous because the MySQL and Oracle drivers in this application are synchronous. Report generation uses bulk SQL queries rather than per-plant queries, then keeps up to 16 report dates in a 10-second in-process cache. Known data mutations clear that cache immediately.
+
+Browser work is deliberately small: server-rendered Jinja pages, one shared CSS file, and one dependency-free JavaScript file. Date-picker assets load only on dashboard, report, targets, and analytics pages. Loading feedback uses transform/opacity animation only while a request is active; there is no continuous smooth-scroll or cursor-tracking loop.
+
+Waitress defaults to four threads and SQLAlchemy defaults to five pooled MySQL connections plus five temporary overflow connections. Both values are environment-configurable so this application can coexist with other services on the same host.
 
 ## Data flow
 
@@ -39,7 +48,7 @@ Manual entries and ERP rows are represented separately so the UI can identify wh
 
 ## Scheduled jobs
 
-APScheduler starts with the application and checks the following jobs in Asia/Kolkata time:
+APScheduler starts with the application when `SCHEDULER_ENABLED=true` and checks the following jobs in Asia/Kolkata time:
 
 - Zero-volume alert: checks every minute against configured alert times.
 - Daily report email: checks every minute against configured report times.
@@ -47,6 +56,8 @@ APScheduler starts with the application and checks the following jobs in Asia/Ko
 - Database backup: checks every minute against configured backup times and retention.
 
 Failed email sends are not marked as sent, allowing the next scheduler tick to retry. Backup files are created locally and must be protected by filesystem permissions.
+
+Run scheduled jobs in exactly one application process. If additional web instances are introduced later, disable their schedulers or extract scheduling to a dedicated worker to prevent duplicate ERP, email, and backup work.
 
 ## Security boundaries
 
@@ -62,3 +73,5 @@ Failed email sends are not marked as sent, allowing the next scheduler tick to r
 - Add reusable business logic under `app/services/`; keep route functions thin.
 - Add a model in `app/models.py`, then document any schema migration or compatibility behavior.
 - Add API fields only with a backwards-compatible response note in `API_DOCUMENTATION.html`.
+
+Framework direction is recorded in [ADR 0001](adr/0001-retain-flask-optimize-runtime.md). FastAPI becomes appropriate only if a separately scalable, async-first API is needed and the database/ERP call chain is also converted to non-blocking drivers.

@@ -89,184 +89,138 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && window._dvtConfirmResolve) window._dvtConfirmResolve(false);
 });
 
-// ── Premium motion layer: smooth scroll + entrance reveals ──────────────────────
-// Self-contained and additive — skipped entirely for prefers-reduced-motion so
-// motion-sensitive users get an instant, static UI instead.
-(function () {
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduceMotion) return;
+// ── Lightweight loading feedback ─────────────────────────────────────────────
+// One composited progress line replaces continuous scroll/card animation. It
+// starts on the same event frame as a click and costs nothing while the UI is idle.
+const DVTLoading = (() => {
+    let pending = 0;
+    let hideTimer = null;
+    const buttonState = new WeakMap();
+    const busyButtons = new Set();
 
-    // Real inertia-based smooth scrolling (native window scroll — position:fixed/
-    // sticky elements are untouched since Lenis just animates real scrollTop).
-    // `prevent` excludes every element that manages its own internal scroll —
-    // without this, Lenis hijacks wheel input meant for a table/sidebar/modal's
-    // own scrollbar and redirects it to the outer page instead, making the
-    // inner area feel stuck.
-    if (typeof Lenis !== 'undefined') {
-        const lenis = new Lenis({
-            duration: 1.1,
-            smoothWheel: true,
-            prevent: (node) => !!(node.closest && node.closest(
-                '.table-container, .sidebar-nav, .modal-body, .modal, select, ' +
-                'textarea, .flatpickr-calendar, [data-lenis-prevent]'
-            )),
-        });
-        function raf(time) {
-            lenis.raf(time);
-            requestAnimationFrame(raf);
-        }
-        requestAnimationFrame(raf);
-        window._dvtLenis = lenis;
+    function setProgress(visible) {
+        const progress = document.getElementById('pageProgress');
+        if (!progress) return;
+        document.documentElement.classList.toggle('is-loading', visible);
+        progress.setAttribute('aria-hidden', visible ? 'false' : 'true');
     }
 
-    // Staggered entrance reveal for the cards/KPI tiles already on the page at
-    // load — purely visual (opacity/transform), never hides content if JS is
-    // slow or errors, since the CSS starting state is only applied via the
-    // 'reveal-init' class added right before animating.
-    document.addEventListener('DOMContentLoaded', () => {
-        const targets = document.querySelectorAll('.content-wrapper > .card, .content-wrapper .kpi-card, .content-wrapper > .mb-24');
-        targets.forEach((el, i) => {
-            el.classList.add('reveal-init');
-            el.style.animationDelay = `${Math.min(i, 8) * 45}ms`;
-            requestAnimationFrame(() => el.classList.add('reveal-in'));
-        });
+    function setButton(button, busy) {
+        if (!(button instanceof HTMLButtonElement)) return;
+        const current = buttonState.get(button) || { count: 0, wasDisabled: button.disabled };
+        current.count += busy ? 1 : -1;
+        current.count = Math.max(0, current.count);
+        buttonState.set(button, current);
+        button.classList.toggle('is-busy', current.count > 0);
+        button.setAttribute('aria-busy', current.count > 0 ? 'true' : 'false');
+        button.disabled = current.count > 0 ? true : current.wasDisabled;
+        if (current.count > 0) {
+            busyButtons.add(button);
+        } else {
+            busyButtons.delete(button);
+            buttonState.delete(button);
+        }
+    }
 
-        initSpotlightCards();
-        initKpiCountUp();
-    });
+    return {
+        start(button) {
+            clearTimeout(hideTimer);
+            pending += 1;
+            setProgress(true);
+            setButton(button, true);
+        },
+        stop(button) {
+            pending = Math.max(0, pending - 1);
+            setButton(button, false);
+            if (pending === 0) {
+                hideTimer = setTimeout(() => setProgress(false), 140);
+            }
+        },
+        reset() {
+            clearTimeout(hideTimer);
+            pending = 0;
+            busyButtons.forEach((button) => {
+                const state = buttonState.get(button);
+                button.classList.remove('is-busy');
+                button.setAttribute('aria-busy', 'false');
+                button.disabled = state ? state.wasDisabled : false;
+                buttonState.delete(button);
+            });
+            busyButtons.clear();
+            setProgress(false);
+        },
+    };
 })();
 
-// ── Cursor-spotlight + subtle 3D tilt on cards ───────────────────────────────────
-// Injects a real DOM overlay (not a pseudo-element — .card/.kpi-card already use
-// ::before/::after for their own decoration) as the first child of each card, so
-// it paints behind existing content with no changes to that content's z-index.
-function initSpotlightCards() {
-    document.querySelectorAll('.card, .kpi-card').forEach(card => {
-        if (card.querySelector(':scope > .spotlight-layer')) return;
+window.addEventListener('pageshow', () => DVTLoading.reset());
 
-        const spot = document.createElement('div');
-        spot.className = 'spotlight-layer';
-        spot.setAttribute('aria-hidden', 'true');
-        card.insertBefore(spot, card.firstChild);
+let _lastAction = null;
+document.addEventListener('pointerdown', (event) => {
+    const button = event.target.closest && event.target.closest('button');
+    _lastAction = button ? { button, at: performance.now() } : null;
+}, true);
 
-        // No transform transition while actively tracking the cursor — the tilt
-        // must apply on the very next frame, 1:1 with the mouse, or it visibly
-        // lags behind and feels sluggish. The smooth spring transition is only
-        // switched on for the single "return to neutral" step on mouseleave.
-        card.addEventListener('mouseenter', () => {
-            card.style.transition = 'box-shadow var(--transition)';
-        });
-        card.addEventListener('mousemove', (e) => {
-            const rect = card.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            card.style.setProperty('--spot-x', `${(x / rect.width) * 100}%`);
-            card.style.setProperty('--spot-y', `${(y / rect.height) * 100}%`);
-            const rx = ((y / rect.height) - 0.5) * -5;
-            const ry = ((x / rect.width) - 0.5) * 5;
-            card.style.transform = `perspective(900px) rotateX(${rx}deg) rotateY(${ry}deg) translateY(-3px)`;
-        });
-        card.addEventListener('mouseleave', () => {
-            card.style.transition = 'transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), box-shadow var(--transition)';
-            card.style.transform = '';
-        });
-    });
-}
+// Give full-page navigation immediate visual acknowledgement. Modified clicks,
+// downloads, external links, and new-tab actions keep their normal behavior.
+document.addEventListener('click', (event) => {
+    const link = event.target.closest && event.target.closest('a[href]');
+    if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey ||
+        event.ctrlKey || event.shiftKey || event.altKey || link.target || link.download) return;
+    const target = new URL(link.href, window.location.href);
+    if (target.origin !== window.location.origin ||
+        (target.pathname === window.location.pathname && target.search === window.location.search)) return;
+    DVTLoading.start();
+}, true);
 
-// ── KPI count-up ──────────────────────────────────────────────────────────────
-// Watches .kpi-value elements and smoothly tweens between old/new numeric
-// values whenever page JS updates them (refresh, date change, ERP sync, etc).
-// Never touches the first render (no "from" value yet) and safely ignores any
-// non-numeric content (percentages, "—" placeholders, text) by leaving it
-// completely untouched — animation only ever fires for a confirmed number-to-
-// number transition.
-function initKpiCountUp() {
-    const animating = new WeakSet();
-    const lastValues = new WeakMap();
-
-    function parseNumeric(text) {
-        const trimmed = (text || '').trim();
-        if (!/^-?[\d,]+(\.\d+)?$/.test(trimmed)) return null;
-        const n = parseFloat(trimmed.replace(/,/g, ''));
-        return isNaN(n) ? null : n;
-    }
-
-    function formatLike(original, value) {
-        const decimals = (original.split('.')[1] || '').length;
-        return Number(value).toLocaleString('en-IN', {
-            minimumFractionDigits: decimals,
-            maximumFractionDigits: decimals,
-        });
-    }
-
-    function tween(el, from, to, finalText) {
-        animating.add(el);
-        el.classList.add('kpi-counting');
-        const duration = 700;
-        const start = performance.now();
-        function step(now) {
-            const p = Math.min((now - start) / duration, 1);
-            const eased = 1 - Math.pow(1 - p, 3);
-            el.textContent = formatLike(finalText, from + (to - from) * eased);
-            if (p < 1) {
-                requestAnimationFrame(step);
-            } else {
-                el.textContent = finalText;
-                animating.delete(el);
-                setTimeout(() => el.classList.remove('kpi-counting'), 400);
-            }
-        }
-        requestAnimationFrame(step);
-    }
-
-    const observer = new MutationObserver((mutations) => {
-        const touched = new Set();
-        mutations.forEach(m => {
-            const el = m.target.nodeType === 3 ? m.target.parentElement : m.target;
-            if (el && el.classList && el.classList.contains('kpi-value') && !animating.has(el)) {
-                touched.add(el);
-            }
-        });
-        touched.forEach(el => {
-            const text = el.textContent;
-            const to = parseNumeric(text);
-            const from = lastValues.get(el);
-            lastValues.set(el, to);
-            if (to === null || from === null || from === undefined || from === to) return;
-            tween(el, from, to, text);
-        });
-    });
-
-    document.querySelectorAll('.kpi-value').forEach(el => {
-        lastValues.set(el, parseNumeric(el.textContent));
-        observer.observe(el, { childList: true, characterData: true, subtree: true });
-    });
-}
-
-// ── Button ripple ─────────────────────────────────────────────────────────────
-// Delegated at the document level — works on every .btn on every page with no
-// per-page wiring. .btn already has position:relative + overflow:hidden, so
-// the ripple clips to the button's own rounded rect automatically.
-document.addEventListener('click', (e) => {
-    const btn = e.target.closest && e.target.closest('.btn');
-    if (!btn) return;
-    const rect = btn.getBoundingClientRect();
-    const size = Math.max(rect.width, rect.height) * 1.8;
-    const ripple = document.createElement('span');
-    ripple.className = 'btn-ripple';
-    ripple.style.width = ripple.style.height = `${size}px`;
-    ripple.style.left = `${e.clientX - rect.left - size / 2}px`;
-    ripple.style.top = `${e.clientY - rect.top - size / 2}px`;
-    btn.appendChild(ripple);
-    ripple.addEventListener('animationend', () => ripple.remove());
+document.addEventListener('submit', (event) => {
+    if (event.defaultPrevented) return;
+    const submitter = event.submitter instanceof HTMLButtonElement ? event.submitter : null;
+    DVTLoading.start(submitter);
 });
+
+const _inflightGets = new Map();
+const _memoryGetCache = new Map();
 
 async function apiCall(url, options = {}) {
     // Prepend URL prefix for obfuscated routing
     const prefix = window.URL_PREFIX || '';
     const fullUrl = url.startsWith('http') ? url : prefix + url;
+    const {
+        dvtCacheMs = 0,
+        dvtForce = false,
+        dvtButton = null,
+        ...fetchOptions
+    } = options;
+    const method = (fetchOptions.method || 'GET').toUpperCase();
+    const cacheKey = method === 'GET' ? fullUrl : null;
+
+    if (cacheKey && !dvtForce) {
+        const cached = _memoryGetCache.get(cacheKey);
+        if (cached && cached.expiresAt > Date.now()) return cached.data;
+        if (_inflightGets.has(cacheKey)) return _inflightGets.get(cacheKey);
+    }
+
+    const recentButton = _lastAction && performance.now() - _lastAction.at < 800
+        ? _lastAction.button
+        : null;
+    const loadingButton = dvtButton || recentButton;
+    _lastAction = null;
+    DVTLoading.start(loadingButton);
+
+    const headers = new Headers(fetchOptions.headers || {});
+    if (!headers.has('Accept')) headers.set('Accept', 'application/json');
+    fetchOptions.headers = headers;
+
+    let timeoutId = null;
+    if (!fetchOptions.signal) {
+        const controller = new AbortController();
+        fetchOptions.signal = controller.signal;
+        timeoutId = setTimeout(() => controller.abort(), 30000);
+    }
+
+    const requestPromise = (async () => {
     try {
-        const resp = await fetch(fullUrl, options);
+        const resp = await fetch(fullUrl, fetchOptions);
 
         // Redirect to login if session expired
         if (resp.status === 401 || (resp.redirected && resp.url.includes('/login'))) {
@@ -274,17 +228,32 @@ async function apiCall(url, options = {}) {
             return;
         }
 
-        const data = await resp.json();
+        const contentType = resp.headers.get('content-type') || '';
+        const data = contentType.includes('application/json')
+            ? await resp.json()
+            : { error: await resp.text() || `HTTP ${resp.status}` };
         if (!resp.ok) {
             throw new Error(data.error || `HTTP ${resp.status}`);
         }
+        if (cacheKey && dvtCacheMs > 0) {
+            _memoryGetCache.set(cacheKey, { data, expiresAt: Date.now() + dvtCacheMs });
+        }
         return data;
     } catch (err) {
-        if (err.message !== 'Unexpected token') {
-            showToast(err.message, 'error');
-        }
+        const message = err.name === 'AbortError'
+            ? 'The server took too long to respond. Please try again.'
+            : err.message;
+        showToast(message, 'error');
         throw err;
+    } finally {
+        if (timeoutId) clearTimeout(timeoutId);
+        DVTLoading.stop(loadingButton);
+        if (cacheKey) _inflightGets.delete(cacheKey);
     }
+    })();
+
+    if (cacheKey) _inflightGets.set(cacheKey, requestPromise);
+    return requestPromise;
 }
 
 // ── Sidebar Toggle ─────────────────────────────────────────────────────────────
@@ -480,13 +449,13 @@ async function syncERP() {
     showToast('Syncing with ERP...', 'info');
     try {
         const result = await apiCall('/api/sync-erp', { method: 'POST' });
-        showToast(`ERP Sync complete: ${result.synced_daily} daily entries, ${result.synced_monthly} monthly – ${(result.months || []).join(', ')}`, 'success');
+        showToast(`ERP Sync complete: ${result.synced_daily} daily entries, ${result.synced_monthly} monthly - ${(result.months || []).join(', ')}`, 'success');
         // Reload dashboard if on that page
         if (typeof loadDashboard === 'function' && document.getElementById('dashboardBody')) {
-            loadDashboard();
+            loadDashboard({ force: true });
         }
     } catch (err) {
-        showToast('ERP Sync failed — Oracle may be unreachable', 'error');
+        showToast('ERP Sync failed. Oracle may be unreachable.', 'error');
     } finally {
         if (syncBtn) syncBtn.classList.remove('syncing');
     }
@@ -496,20 +465,51 @@ async function syncERP() {
 // DASHBOARD
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-async function loadDashboard() {
+function beginTableLoad(body, colspan, label) {
+    if (!body) return;
+    const card = body.closest('.card');
+    if (card) {
+        card.classList.add('is-updating');
+        card.setAttribute('aria-busy', 'true');
+    }
+    if (body.dataset.loaded === 'true') return;
+    body.innerHTML = `<tr><td colspan="${colspan}" class="loading">
+        <div class="table-skeleton" aria-hidden="true">
+            <span></span><span></span><span></span>
+        </div>
+        <span>${escHtml(label)}</span>
+    </td></tr>`;
+}
+
+function endTableLoad(body) {
+    const card = body && body.closest('.card');
+    if (!card) return;
+    card.classList.remove('is-updating');
+    card.setAttribute('aria-busy', 'false');
+}
+
+async function loadDashboard({ force = false } = {}) {
     const dateInput = document.getElementById('reportDate');
     if (!dateInput) return;
     const dateVal = dateInput.value;
-    const url = dateVal ? `/api/dashboard?date=${dateVal}` : '/api/dashboard';
+    const params = new URLSearchParams();
+    if (dateVal) params.set('date', dateVal);
+    if (force) params.set('refresh', '1');
+    const query = params.toString();
+    const url = `/api/dashboard${query ? `?${query}` : ''}`;
 
     const body = document.getElementById('dashboardBody');
-    body.innerHTML = '<tr><td colspan="13" class="loading"><div class="spinner"></div><span>Loading...</span></td></tr>';
+    beginTableLoad(body, 14, 'Loading dashboard');
 
     try {
-        const data = await apiCall(url);
+        const data = await apiCall(url, { dvtCacheMs: 15000, dvtForce: force });
         renderDashboard(data);
     } catch (err) {
-        body.innerHTML = '<tr><td colspan="13" style="text-align:center;padding:40px;color:var(--accent-red)">Failed to load data</td></tr>';
+        if (body.dataset.loaded !== 'true') {
+            body.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:40px;color:var(--accent-red)">Failed to load data</td></tr>';
+        }
+    } finally {
+        endTableLoad(body);
     }
 }
 
@@ -550,20 +550,28 @@ function renderDashboard(data) {
 // REPORT
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-async function loadReport() {
+async function loadReport({ force = false } = {}) {
     const dateInput = document.getElementById('reportDate');
     if (!dateInput) return;
     const dateVal = dateInput.value;
-    const url = dateVal ? `/api/report?date=${dateVal}` : '/api/report';
+    const params = new URLSearchParams();
+    if (dateVal) params.set('date', dateVal);
+    if (force) params.set('refresh', '1');
+    const query = params.toString();
+    const url = `/api/report${query ? `?${query}` : ''}`;
 
     const body = document.getElementById('reportBody');
-    if (body) body.innerHTML = '<tr><td colspan="13" class="loading"><div class="spinner"></div><span>Loading...</span></td></tr>';
+    beginTableLoad(body, 14, 'Loading report');
 
     try {
-        const data = await apiCall(url);
+        const data = await apiCall(url, { dvtCacheMs: 15000, dvtForce: force });
         renderReportPage(data);
     } catch (err) {
-        if (body) body.innerHTML = '<tr><td colspan="13" style="text-align:center;padding:40px;color:var(--accent-red)">Failed to load report</td></tr>';
+        if (body && body.dataset.loaded !== 'true') {
+            body.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:40px;color:var(--accent-red)">Failed to load report</td></tr>';
+        }
+    } finally {
+        endTableLoad(body);
     }
 }
 
@@ -674,6 +682,7 @@ function renderReportTable(targetId, data) {
     </tr>`;
 
     body.innerHTML = html;
+    body.dataset.loaded = 'true';
 }
 
 function budgetPctClass(pctStr) {
@@ -750,7 +759,7 @@ async function loadManualPlants() {
             html += `<tr class="plant-row" onclick='openPlantEntry(${JSON.stringify(p.plant_code)}, ${JSON.stringify(p.daily_tracker_name || p.erp_name || p.plant_code)}, ${JSON.stringify(p.region || '')})'>
                 <td><span class="badge badge-blue">${escHtml(p.plant_code)}</span></td>
                 <td style="font-weight:500;">${name}</td>
-                <td>${escHtml(p.region || '—')}</td>
+                <td>${escHtml(p.region || '-')}</td>
                 <td class="text-center">
                     <button class="btn btn-outline btn-sm btn-icon open-entry-btn" title="Enter data">
                         <span class="material-icons-round">edit_calendar</span>
@@ -883,7 +892,7 @@ async function saveDayEntry(plantCode, dateStr, inputId, flashId) {
             const flash = document.getElementById(flashId);
             if (flash) {
                 flash.textContent = '';
-                flash.innerHTML   = `<span class="material-icons-round" style="font-size:15px;">check_circle</span> Saved — ${fmtDec(volume)} CUM`;
+                flash.innerHTML   = `<span class="material-icons-round" style="font-size:15px;">check_circle</span> Saved: ${fmtDec(volume)} CUM`;
                 flash.classList.add('visible');
                 setTimeout(() => flash.classList.remove('visible'), 2500);
             }
@@ -1328,7 +1337,7 @@ class DVTPaginator {
         ).join('');
 
         container.innerHTML = `<div class="pg-wrapper">
-  <div class="pg-info">${start}–${end} of ${count}</div>
+  <div class="pg-info">${start}-${end} of ${count}</div>
   <nav class="pg-nav">
     <button class="pg-btn" onclick="DVTPaginator._reg['${id}']&&DVTPaginator._reg['${id}'].goTo(1)" ${page===1?'disabled':''} title="First page">«</button>
     <button class="pg-btn" onclick="DVTPaginator._reg['${id}']&&DVTPaginator._reg['${id}'].goTo(${page-1})" ${page===1?'disabled':''} title="Previous">‹</button>
@@ -1389,7 +1398,7 @@ class DVTPaginator {
         }
 
         container.innerHTML = `<div class="pg-wrapper">
-  <div class="pg-info">${start}–${end} of ${total}</div>
+  <div class="pg-info">${start}-${end} of ${total}</div>
   <nav class="pg-nav">
     <button class="pg-btn" onclick="${callbackName}(1)" ${page===1?'disabled':''}>«</button>
     <button class="pg-btn" onclick="${callbackName}(${page-1})" ${page===1?'disabled':''}>‹</button>
@@ -1466,7 +1475,7 @@ async function loadPlants() {
                 <td><span class="badge badge-blue">${escHtml(p.plant_code)}</span></td>
                 <td>${escHtml(p.daily_tracker_name || '')}</td>
                 <td>${escHtml(p.erp_name || '')}</td>
-                <td>${escHtml(p.region || '—')}</td>
+                <td>${escHtml(p.region || '-')}</td>
                 <td class="text-center">
                     <span class="badge ${p.is_active ? 'badge-green' : 'badge-red'}">${p.is_active ? 'Yes' : 'No'}</span>
                 </td>
@@ -1616,7 +1625,7 @@ let _roDragInsertBefore = true;
 async function showPlantReorderModal() {
     const sel = document.getElementById('reorderRegionSel');
     if (!sel) return;
-    sel.innerHTML = '<option value="">— pick an area —</option>';
+    sel.innerHTML = '<option value="">Pick an area</option>';
     _roHasChanges = false;
     _roUpdateSaveBtn();
     document.getElementById('reorderSubtitle').textContent = 'Select an area to start';
@@ -2009,7 +2018,7 @@ async function loadUsers() {
 
         const renderUser = (u) => `<tr>
             <td><strong>${escHtml(u.username)}</strong></td>
-            <td>${escHtml(u.email || '—')}</td>
+            <td>${escHtml(u.email || '-')}</td>
             <td>${escHtml(u.display_name)}</td>
             <td>${_roleLabels[u.role] || escHtml(u.role)}</td>
             <td class="text-center">

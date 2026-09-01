@@ -12,8 +12,11 @@
 
 ```powershell
 python -m compileall -q app run.py server.py
+python -m unittest discover -s tests -v
 python -m pip check
 ```
+
+The documentation tests verify that public links resolve and that portfolio screenshots remain valid, high-resolution JPEG files.
 
 If you change code, refresh the local Graphify code graph with `graphify update .` as described in `AGENTS.md` for the maintainer workspace.
 

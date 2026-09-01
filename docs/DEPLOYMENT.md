@@ -10,6 +10,21 @@
 
 ## Install
 
+### Matching Windows server: copy-based deployment
+
+When the production machine is a replica of the development machine, the shortest safe deployment is:
+
+1. Copy the project folder to its permanent production path. Exclude `venv/`, `Logs/`, `database-backup/`, `.git/`, and any exported reports.
+2. Copy the production `.env` into the project root. Do not place it in Git or send it through an unapproved channel.
+3. Copy Oracle Instant Client to the same path used on development, or update `ORACLE_CLIENT_PATH` in `.env` to its production path. Thin mode needs no client folder.
+4. Confirm that Python, MySQL, the database name, and the existing database account are available on the production machine.
+5. Run `start-all.bat`. It creates `venv`, installs the pinned dependencies, and starts Waitress.
+6. Open `/r4x8e/login`, sign in, and verify one dashboard/report request before adding `start-all.bat` to Task Scheduler.
+
+Do not copy the development virtual environment: installed scripts contain machine-specific paths. Do not copy a development database over an existing production database. Database transfer, when actually required, should use an approved backup-and-restore process with a confirmed target.
+
+### Git-based installation
+
 ```powershell
 git clone https://github.com/jarjishSiddibapa/rdc-daily-volume-tracker.git
 cd rdc-daily-volume-tracker

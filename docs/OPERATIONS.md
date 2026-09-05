@@ -9,7 +9,23 @@
 
 ## ERP synchronization
 
-ERP synchronization runs every 30 minutes and can also be triggered from the dashboard. A failed Oracle connection is logged and does not prevent manual-entry workflows. Check `ORACLE_HOST`, `ORACLE_PORT`, `ORACLE_SERVICE`, credentials, and (if applicable) `ORACLE_CLIENT_PATH` before retrying.
+ERP synchronization runs every 30 minutes and can also be triggered from the dashboard. It first checks the enabled, inventory-enabled Oracle organization master, then synchronizes recent production and invoicing. Existing active/inactive status and tracker names are preserved. A completely new organization code is created as active and reported in the sync response.
+
+A failed Oracle connection is logged and does not prevent manual-entry workflows. Check `ORACLE_HOST`, `ORACLE_PORT`, `ORACLE_SERVICE`, credentials, and (if applicable) `ORACLE_CLIENT_PATH` before retrying.
+
+## Approved active-plant baseline
+
+Use the reconciliation command when an approved Excel list must replace the current active/inactive baseline. Stop the application first so the scheduler cannot overlap the maintenance transaction.
+
+```powershell
+# Preview only
+python scripts\reconcile_active_plants.py "C:\path\RDC_Updated_Plant_Name.xlsx"
+
+# Commit after reviewing the preview
+python scripts\reconcile_active_plants.py "C:\path\RDC_Updated_Plant_Name.xlsx" --apply
+```
+
+The command validates the `Updated Plant Name` worksheet and matches rows only by normalized organization code. Listed codes become active and receive the workbook tracker name. Every other existing plant becomes inactive. The command also records every currently enabled ERP organization in MySQL, leaving unlisted organizations inactive, so later syncs can distinguish them from genuinely new organizations. It is idempotent and starts no background scheduler.
 
 ## Email alerts and reports
 

@@ -36,15 +36,15 @@ Waitress defaults to four threads and SQLAlchemy defaults to five pooled MySQL c
 ## Data flow
 
 ```text
-Manual entry ───────────────┐
-                            ├── MySQL ── analytics/report services ── dashboard/Excel/API
-Oracle ERP (read-only) ─ ERP sync ─┘
+Manual entry ────────────────────────────────────────────────┐
+Oracle organization master (read-only) ── plant discovery ──┼── MySQL ── analytics/report services ── dashboard/Excel/API
+Oracle production/invoicing (read-only) ── volume sync ──────┘
 
 MySQL ── backup service ── database-backup/*.sql (ignored local artifact)
 Report/alert services ── SMTP (optional, configured in the admin UI)
 ```
 
-Manual entries and ERP rows are represented separately so the UI can identify whether a plant is manual or synchronized. Analytics supports both produced and invoiced metrics.
+Manual entries and ERP rows are represented separately so the UI can identify whether a plant is manual or synchronized. Analytics supports both produced and invoiced metrics. Organization discovery does not depend on production transactions: every enabled, inventory-enabled ERP organization is checked in one batch. Existing plant status and tracker names are preserved, while a genuinely new organization code is created as an active plant with its ERP name as the initial tracker name.
 
 ## Scheduled jobs
 

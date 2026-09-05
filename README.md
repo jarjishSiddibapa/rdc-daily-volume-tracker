@@ -29,7 +29,7 @@ Daily production reporting often spans ERP data, manual plant updates, spreadshe
 | Area | What the application provides |
 | --- | --- |
 | **Daily visibility** | Produced and invoiced KPIs, plant and area subtotals, month-to-date progress, target attainment, and previous-month/year comparisons |
-| **Data collection** | Read-only Oracle ERP synchronization every 30 minutes, manual daily entry, and a 30-day correction workflow |
+| **Data collection** | Read-only Oracle organization discovery and volume synchronization every 30 minutes, manual daily entry, and a 30-day correction workflow |
 | **Planning** | Monthly plant targets, inline editing, Excel target upload, plant/area organization, and display ordering |
 | **Analytics** | Day-wise and monthly views, produced/invoiced switching, plant filtering, quick date ranges, and formatted Excel exports |
 | **People & ownership** | Employee and territory-manager details connected to operational reporting |
@@ -112,6 +112,7 @@ The framework decision is documented in [ADR 0001: Retain Flask and optimize the
 - Role and plant-scope checks applied at route boundaries.
 - Audit records for sensitive operational and administrative actions.
 - Least-privilege, read-only Oracle integration.
+- Existing plant status and approved tracker names survive every ERP sync; only a never-before-seen organization defaults to active.
 - Retry-safe scheduled email checks and configurable backup retention.
 - Secrets, logs, exports, backups, Oracle binaries, and local analysis excluded from Git.
 

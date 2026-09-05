@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added ERP organization-master discovery so plants appear before their first production transaction.
+- Added an idempotent active-plant reconciliation command that matches Excel tracker names by organization code, establishes the approved active/inactive baseline, and preserves it during later ERP syncs.
+- Added new-plant details to ERP sync responses and immediate UI notification while keeping existing statuses and tracker names unchanged.
 - Added a one-click `start-all.bat` launcher designed for Windows Task Scheduler, including safe `.env` creation and secret generation.
 - Added a lightweight, delayed loading-status message alongside the progress animation.
 - Added versioned long-term caching and low-CPU gzip for static and dynamic assets.

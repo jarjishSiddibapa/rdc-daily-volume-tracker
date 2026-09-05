@@ -449,7 +449,11 @@ async function syncERP() {
     showToast('Syncing with ERP...', 'info');
     try {
         const result = await apiCall('/api/sync-erp', { method: 'POST' });
-        showToast(`ERP Sync complete: ${result.synced_daily} daily entries, ${result.synced_monthly} monthly - ${(result.months || []).join(', ')}`, 'success');
+        const newPlants = result.new_plant_details || [];
+        const newPlantText = newPlants.length
+            ? ` New active plant${newPlants.length === 1 ? '' : 's'}: ${newPlants.map(p => p.plant_code).join(', ')}.`
+            : '';
+        showToast(`ERP Sync complete: ${result.synced_daily} daily entries, ${result.synced_monthly} monthly - ${(result.months || []).join(', ')}.${newPlantText}`, 'success');
         // Reload dashboard if on that page
         if (typeof loadDashboard === 'function' && document.getElementById('dashboardBody')) {
             loadDashboard({ force: true });

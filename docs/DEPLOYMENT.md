@@ -23,6 +23,15 @@ When the production machine is a replica of the development machine, the shortes
 
 Do not copy the development virtual environment: installed scripts contain machine-specific paths. Do not copy a development database over an existing production database. Database transfer, when actually required, should use an approved backup-and-restore process with a confirmed target.
 
+When deploying the organization-master discovery change to an existing database, keep the application stopped and establish the approved baseline before the first server start:
+
+```powershell
+venv\Scripts\python.exe scripts\reconcile_active_plants.py "C:\path\RDC_Updated_Plant_Name.xlsx"
+venv\Scripts\python.exe scripts\reconcile_active_plants.py "C:\path\RDC_Updated_Plant_Name.xlsx" --apply
+```
+
+Review the dry-run output before using `--apply`. The workbook is operational input and remains outside Git.
+
 ### Git-based installation
 
 ```powershell

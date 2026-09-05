@@ -36,6 +36,17 @@ def _init_oracle():
 # Initialize on import
 _init_oracle()
 
+# ── Active ERP organization/plant master ─────────────────────────────────────
+ERP_ORGANIZATIONS_SQL = """
+SELECT
+    od.organization_code,
+    od.organization_name
+FROM apps.org_organization_definitions od
+WHERE od.disable_date IS NULL
+  AND od.inventory_enabled_flag = 'Y'
+ORDER BY od.organization_code
+"""
+
 # ── SQL query matching the ERP query from requirements ───────────────────────
 PRODUCTION_SQL = """
 SELECT
@@ -229,6 +240,16 @@ def fetch_erp_production_data() -> Optional[list[dict]]:
                 record[key] = 0.0
 
     return results
+
+
+def fetch_erp_organizations() -> Optional[list[dict]]:
+    """Return the enabled, inventory-enabled ERP organization master.
+
+    Organization codes are the plant identifiers used by this application. The
+    master query is intentionally independent of production transactions so a
+    newly-created plant can be discovered before its first batch is produced.
+    """
+    return _execute_query(ERP_ORGANIZATIONS_SQL)
 
 
 def fetch_erp_daily_production(

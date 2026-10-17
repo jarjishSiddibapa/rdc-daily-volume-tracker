@@ -25,6 +25,8 @@ python scripts\reconcile_active_plants.py "C:\path\RDC_Updated_Plant_Name.xlsx"
 python scripts\reconcile_active_plants.py "C:\path\RDC_Updated_Plant_Name.xlsx" --apply
 ```
 
+Both modes first print a summary of what will change and warn about any plant that would be deactivated although it produced in the last 30 days. `--apply` then asks you to type `APPLY`; in a non-interactive run it refuses unless `--yes` is also given. Run it only for a deliberate baseline reset: it deactivates every existing plant that is missing from the workbook, including plants the ERP sync discovered after the workbook was prepared.
+
 The command validates the `Updated Plant Name` worksheet and matches rows only by normalized organization code. Listed codes become active and receive the workbook tracker name. Every other existing plant becomes inactive. The command also records every currently enabled ERP organization in MySQL, leaving unlisted organizations inactive, so later syncs can distinguish them from genuinely new organizations. It is idempotent and starts no background scheduler.
 
 ## Email alerts and reports

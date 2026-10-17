@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Iterable
 
 from openpyxl import load_workbook
+from sqlalchemy import func
 
 from app import db
-from app.models import Plant
+from app.models import Plant, PlantDailyVolume
 
 
+RECENT_PRODUCTION_DAYS = 30
 WORKSHEET_NAME = "Updated Plant Name"
 EXPECTED_HEADERS = (
     "S. No",
@@ -132,6 +135,40 @@ def validate_active_plants_against_erp(
         for code, record in sorted(active_plants.items())
         if record.erp_name.casefold() != erp_organizations[code].casefold()
     ]
+
+
+def find_recent_production(
+    plant_codes: Iterable[str],
+    days: int = RECENT_PRODUCTION_DAYS,
+) -> dict[str, dict]:
+    """Return plants among ``plant_codes`` that produced within the last ``days`` days.
+
+    Used to warn before a reconciliation switches off a plant that is still
+    producing, because an inactive plant disappears from every report.
+    """
+    codes = list(plant_codes)
+    if not codes:
+        return {}
+
+    since = date.today() - timedelta(days=days)
+    rows = (
+        db.session.query(
+            PlantDailyVolume.plant_code,
+            func.count(PlantDailyVolume.id),
+            func.max(PlantDailyVolume.entry_date),
+        )
+        .filter(
+            PlantDailyVolume.plant_code.in_(codes),
+            PlantDailyVolume.entry_date >= since,
+            PlantDailyVolume.volume > 0,
+        )
+        .group_by(PlantDailyVolume.plant_code)
+        .all()
+    )
+    return {
+        code: {"production_days": count, "last_production": last.isoformat()}
+        for code, count, last in rows
+    }
 
 
 def reconcile_plant_master(

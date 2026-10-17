@@ -1,3 +1,4 @@
+from datetime import date, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
@@ -7,10 +8,11 @@ from flask import Flask
 from openpyxl import Workbook
 
 from app import db
-from app.models import Plant
+from app.models import Plant, PlantDailyVolume
 from app.services.erp_sync import _sync_erp_organization_master
 from app.services.plant_master import (
     ActivePlantRecord,
+    find_recent_production,
     load_active_plant_workbook,
     reconcile_plant_master,
 )
@@ -111,6 +113,33 @@ class PlantMasterTests(TestCase):
         self.assertTrue(db.session.get(Plant, "C1").is_active)
         self.assertFalse(db.session.get(Plant, "D1").is_active)
         self.assertTrue(db.session.get(Plant, "B1").is_manual_entry)
+
+    def test_recent_production_flags_only_plants_that_recently_produced(self):
+        today = date.today()
+        db.session.add_all([
+            Plant(plant_code="P1", daily_tracker_name="Producing", erp_name="P1", is_active=True),
+            Plant(plant_code="P2", daily_tracker_name="Stale", erp_name="P2", is_active=True),
+            Plant(plant_code="P3", daily_tracker_name="Zero only", erp_name="P3", is_active=True),
+            Plant(plant_code="P4", daily_tracker_name="Never", erp_name="P4", is_active=True),
+        ])
+        db.session.commit()
+        db.session.add_all([
+            # Explicit ids: SQLite does not auto-number BigInteger primary keys.
+            PlantDailyVolume(id=1, plant_code="P1", entry_date=today - timedelta(days=1), volume=120),
+            PlantDailyVolume(id=2, plant_code="P1", entry_date=today - timedelta(days=3), volume=80),
+            PlantDailyVolume(id=3, plant_code="P2", entry_date=today - timedelta(days=90), volume=50),
+            PlantDailyVolume(id=4, plant_code="P3", entry_date=today - timedelta(days=1), volume=0),
+        ])
+        db.session.commit()
+
+        result = find_recent_production(["P1", "P2", "P3", "P4"])
+
+        self.assertEqual(set(result), {"P1"})
+        self.assertEqual(result["P1"]["production_days"], 2)
+        self.assertEqual(
+            result["P1"]["last_production"], (today - timedelta(days=1)).isoformat()
+        )
+        self.assertEqual(find_recent_production([]), {})
 
     def test_future_master_sync_preserves_existing_status_and_tracker_name(self):
         db.session.add_all([

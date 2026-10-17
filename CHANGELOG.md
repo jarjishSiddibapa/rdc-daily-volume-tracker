@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Made `reconcile_active_plants.py --apply` show its impact, warn about plants that would be deactivated despite recent production, and require typed confirmation (or `--yes`).
 - Added ERP organization-master discovery so plants appear before their first production transaction.
 - Added an idempotent active-plant reconciliation command that matches Excel tracker names by organization code, establishes the approved active/inactive baseline, and preserves it during later ERP syncs.
 - Added new-plant details to ERP sync responses and immediate UI notification while keeping existing statuses and tracker names unchanged.

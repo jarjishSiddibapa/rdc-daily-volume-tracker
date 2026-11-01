@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added `scripts/backfill_erp_sync.py` to re-sync past months, and let `sync_erp_data` take an explicit month range.
+- ERP daily production now adds `XXRDC_IMPORTSO_DATA_STG` (DD-MM-YYYY dates) to `rdc_batch_trx_headers`, summing both sources per plant and day, because some plants record batches only in the staging table.
+- Fixed ERP sync dropping invoiced quantity on days a plant had no production: invoice-only days are now stored with volume 0 and any existing volume is left untouched.
 - Made `reconcile_active_plants.py --apply` show its impact, warn about plants that would be deactivated despite recent production, and require typed confirmation (or `--yes`).
 - Added ERP organization-master discovery so plants appear before their first production transaction.
 - Added an idempotent active-plant reconciliation command that matches Excel tracker names by organization code, establishes the approved active/inactive baseline, and preserves it during later ERP syncs.

@@ -11,6 +11,16 @@
 
 ERP synchronization runs every 30 minutes and can also be triggered from the dashboard. It first checks the enabled, inventory-enabled Oracle organization master, then synchronizes recent production and invoicing. Existing active/inactive status and tracker names are preserved. A completely new organization code is created as active and reported in the sync response.
 
+Daily production is the sum of two ERP sources per plant and day: `rdc_batch_trx_headers` and `XXRDC_IMPORTSO_DATA_STG` (its `DD-MM-YYYY` dates are converted). Invoiced quantity is stored for every day the ERP reports an invoice, even when the plant produced nothing that day.
+
+The sync only refreshes the previous and current month. To correct older months, run the backfill (stop the application first, as for the reconciliation command):
+
+```powershell
+python scripts\backfill_erp_sync.py 2026-04 2026-09
+```
+
+It re-syncs each month in the range, fills missing days and invoiced quantities, and overwrites stored volumes with the ERP volume for days where the ERP reports production.
+
 A failed Oracle connection is logged and does not prevent manual-entry workflows. Check `ORACLE_HOST`, `ORACLE_PORT`, `ORACLE_SERVICE`, credentials, and (if applicable) `ORACLE_CLIENT_PATH` before retrying.
 
 ## Approved active-plant baseline

@@ -99,24 +99,56 @@ GROUP BY
 """
 
 # ── Daily breakdown for a given date range (parameterized) ───────────────────
+# Some plants record batches in rdc_batch_trx_headers, others in
+# XXRDC_IMPORTSO_DATA_STG. A plant's volume is the sum of both sources. The
+# staging table stores dates as DD-MM-YYYY text, so they are converted to the
+# YYYY-MM-DD form used everywhere else.
 DAILY_PRODUCTION_SQL = """
 SELECT
-    od.organization_code,
-    od.organization_name,
-    b.proddate          AS prod_date,
-    SUM(b.produced_quantity) AS daily_volume
-FROM apps.rdc_batch_trx_headers b
-JOIN apps.org_organization_definitions od
-    ON od.organization_code = b.plantno
-WHERE b.proddate >= :start_date
-  AND b.proddate <= :end_date
+    organization_code,
+    organization_name,
+    prod_date,
+    SUM(daily_volume) AS daily_volume
+FROM (
+    SELECT
+        od.organization_code,
+        od.organization_name,
+        b.proddate               AS prod_date,
+        SUM(b.produced_quantity) AS daily_volume
+    FROM apps.rdc_batch_trx_headers b
+    JOIN apps.org_organization_definitions od
+        ON od.organization_code = b.plantno
+    WHERE b.proddate >= :start_date
+      AND b.proddate <= :end_date
+    GROUP BY
+        od.organization_code,
+        od.organization_name,
+        b.proddate
+
+    UNION ALL
+
+    SELECT
+        od.organization_code,
+        od.organization_name,
+        TO_CHAR(TO_DATE(b.b_proddate, 'DD-MM-YYYY'), 'YYYY-MM-DD') AS prod_date,
+        SUM(b.b_produced_quantity) AS daily_volume
+    FROM apps.XXRDC_IMPORTSO_DATA_STG b
+    JOIN apps.org_organization_definitions od
+        ON od.organization_code = b.b_plantno
+    WHERE TO_DATE(b.b_proddate, 'DD-MM-YYYY') BETWEEN TO_DATE(:start_date, 'YYYY-MM-DD')
+                                                   AND TO_DATE(:end_date,   'YYYY-MM-DD')
+    GROUP BY
+        od.organization_code,
+        od.organization_name,
+        TO_CHAR(TO_DATE(b.b_proddate, 'DD-MM-YYYY'), 'YYYY-MM-DD')
+)
 GROUP BY
-    od.organization_code,
-    od.organization_name,
-    b.proddate
+    organization_code,
+    organization_name,
+    prod_date
 ORDER BY
-    od.organization_code,
-    b.proddate
+    organization_code,
+    prod_date
 """
 
 

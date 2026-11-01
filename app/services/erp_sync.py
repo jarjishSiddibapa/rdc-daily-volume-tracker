@@ -115,21 +115,23 @@ def _get_months_to_sync() -> list[tuple[date, date]]:
     return months
 
 
-def sync_erp_data() -> dict:
+def sync_erp_data(months: list[tuple[date, date]] | None = None) -> dict:
     """
     Fetch production data from ERP and store in MySQL.
 
     Steps:
       1. Discover new plants from the ERP organization master
       2. Fetch daily breakdown for previous + current month
+         (or the explicit (month_start, month_end) list given, for backfills)
       3. Recalculate monthly volumes from daily entries (single source of truth)
 
     Returns a dict with status info.
     """
-    months_to_sync = _get_months_to_sync()
+    months_to_sync = months or _get_months_to_sync()
 
     synced_daily = 0
     synced_monthly = 0
+    synced_invoice_only = 0
     skipped = 0
     new_plants = 0
     new_plant_details = []
@@ -192,6 +194,7 @@ def sync_erp_data() -> dict:
             logger.warning(f"Invoiced data unavailable for {month_start} → {month_end}; preserving existing values")
 
         synced_plants_this_month = set()
+        production_keys = set()
         months_synced.append(month_start.isoformat())
 
         # ── Upsert all daily volumes ─────────────────────────────────────
@@ -263,9 +266,39 @@ def sync_erp_data() -> dict:
 
                 synced_daily += 1
                 synced_plants_this_month.add(plant_code)
+                production_keys.add((plant_code, prod_date_str))
             except Exception as exc:
                 errors.append(f"{plant_code} ({prod_date_str}): {str(exc)}")
                 logger.error(f"Error syncing daily for {plant_code} on {prod_date_str}: {exc}")
+
+        # ── Invoiced quantity is independent of production ───────────────
+        # A plant can dispatch on a day it produced nothing (or the ERP
+        # returned a zero-volume row). Store those invoices too, leaving any
+        # existing volume untouched.
+        if inv_data_available:
+            known_plants = {code for (code,) in db.session.query(Plant.plant_code).all()}
+            for (plant_code, inv_date_str), inv_qty in inv_lookup.items():
+                if (plant_code, inv_date_str) in production_keys or inv_qty == 0:
+                    continue
+                if plant_code in manual_plants or plant_code not in known_plants:
+                    continue
+                try:
+                    entry_date = datetime.strptime(inv_date_str, "%Y-%m-%d").date()
+                except ValueError:
+                    errors.append(f"{plant_code}: invalid invoice date {inv_date_str}")
+                    continue
+                try:
+                    upsert = mysql_insert(PlantDailyVolume.__table__).values(
+                        plant_code=plant_code,
+                        entry_date=entry_date,
+                        volume=0,
+                        invoiced_qty=inv_qty,
+                    ).on_duplicate_key_update(invoiced_qty=inv_qty)
+                    db.session.execute(upsert)
+                    synced_invoice_only += 1
+                except Exception as exc:
+                    errors.append(f"{plant_code} ({inv_date_str}) invoice: {str(exc)}")
+                    logger.error(f"Error syncing invoice for {plant_code} on {inv_date_str}: {exc}")
 
         all_synced_plants[month_start] = synced_plants_this_month
 
@@ -289,6 +322,7 @@ def sync_erp_data() -> dict:
     log_action("erp_sync", {
         "synced_daily": synced_daily,
         "synced_monthly": synced_monthly,
+        "synced_invoice_only": synced_invoice_only,
         "new_plants": new_plants,
         "new_plant_details": new_plant_details,
         "organization_master_count": organization_master_count,
@@ -302,6 +336,7 @@ def sync_erp_data() -> dict:
         "status": "success",
         "synced_daily": synced_daily,
         "synced_monthly": synced_monthly,
+        "synced_invoice_only": synced_invoice_only,
         "skipped": skipped,
         "new_plants": new_plants,
         "new_plant_details": new_plant_details,

@@ -1,5 +1,5 @@
 import json
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
@@ -145,33 +145,42 @@ class PlantMasterTests(TestCase):
         )
         self.assertEqual(find_recent_production([]), {})
 
-    def test_inactive_plant_is_activated_only_when_untouched_and_newly_producing(self):
+    def test_inactive_plant_is_activated_unless_switched_off_after_producing(self):
         today = date.today()
+        long_ago = datetime.now() - timedelta(days=100)
         db.session.add_all([
             Plant(plant_code=code, daily_tracker_name=code, erp_name=f"ERP {code}", is_active=False)
-            for code in ("NEW", "ADM", "OLD", "RST")
+            for code in ("NEW", "EMP", "ADM", "OLD", "RST")
         ])
         db.session.commit()
         db.session.add_all([
             # Explicit ids: SQLite does not auto-number BigInteger primary keys.
             PlantDailyVolume(id=1, plant_code="NEW", entry_date=today - timedelta(days=3), volume=10),
-            PlantDailyVolume(id=2, plant_code="ADM", entry_date=today - timedelta(days=3), volume=10),
-            PlantDailyVolume(id=3, plant_code="OLD", entry_date=today - timedelta(days=3), volume=10),
-            PlantDailyVolume(id=4, plant_code="OLD", entry_date=today - timedelta(days=120), volume=10),
-            PlantDailyVolume(id=5, plant_code="RST", entry_date=today - timedelta(days=3), volume=10),
-            AuditLog(id=1, username="admin", action="plant_update",
+            PlantDailyVolume(id=2, plant_code="EMP", entry_date=today - timedelta(days=3), volume=10),
+            PlantDailyVolume(id=3, plant_code="ADM", entry_date=today - timedelta(days=3), volume=10),
+            PlantDailyVolume(id=4, plant_code="OLD", entry_date=today - timedelta(days=3), volume=10),
+            PlantDailyVolume(id=5, plant_code="OLD", entry_date=today - timedelta(days=120), volume=10),
+            PlantDailyVolume(id=6, plant_code="RST", entry_date=today - timedelta(days=3), volume=10),
+            # EMP was switched off while still empty, long before its first production.
+            AuditLog(id=1, username="admin", action="plant_update", created_at=long_ago,
+                     details=json.dumps({"plant_code": "EMP", "active_changed": True, "is_active": False})),
+            # ADM and RST were switched off after they had already produced.
+            AuditLog(id=2, username="admin", action="plant_update", created_at=datetime.now(),
                      details=json.dumps({"plant_code": "ADM", "active_changed": True, "is_active": False})),
-            AuditLog(id=2, username="system", action="plant_master_reconcile",
+            AuditLog(id=3, username="system", action="plant_master_reconcile", created_at=datetime.now(),
                      details=json.dumps({"deactivated": ["RST"]})),
         ])
         db.session.commit()
 
-        activated, reported = _activate_or_report_inactive_producing({"NEW", "ADM", "OLD", "RST"})
+        activated, reported = _activate_or_report_inactive_producing(
+            {"NEW", "EMP", "ADM", "OLD", "RST"}
+        )
         db.session.commit()
 
-        self.assertEqual([a["plant_code"] for a in activated], ["NEW"])
+        self.assertEqual(sorted(a["plant_code"] for a in activated), ["EMP", "NEW"])
         self.assertEqual(sorted(r["plant_code"] for r in reported), ["ADM", "OLD", "RST"])
-        self.assertTrue(db.session.get(Plant, "NEW").is_active)
+        for code in ("NEW", "EMP"):
+            self.assertTrue(db.session.get(Plant, code).is_active)
         for code in ("ADM", "OLD", "RST"):
             self.assertFalse(db.session.get(Plant, code).is_active)
         self.assertEqual(_activate_or_report_inactive_producing(set()), ([], []))

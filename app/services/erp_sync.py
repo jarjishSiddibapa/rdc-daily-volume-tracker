@@ -93,35 +93,43 @@ def _sync_erp_organization_master() -> dict:
     }
 
 
-def _deliberately_inactive_codes() -> set[str]:
-    """Plants an admin switched on/off, or the baseline reset deactivated."""
-    codes: set[str] = set()
+def _last_status_changes() -> dict[str, date]:
+    """Date each plant was last switched on/off by an admin or the baseline reset."""
+    changed: dict[str, date] = {}
     entries = AuditLog.query.filter(
         AuditLog.action.in_(["plant_update", "plant_master_reconcile"])
-    ).with_entities(AuditLog.action, AuditLog.details).all()
-    for action, details in entries:
+    ).with_entities(AuditLog.action, AuditLog.details, AuditLog.created_at).all()
+    for action, details, created_at in entries:
         try:
             data = json.loads(details or "{}")
         except ValueError:
             continue
         if action == "plant_update" and data.get("active_changed"):
-            codes.add(str(data.get("plant_code", "")).strip().upper())
+            codes = [data.get("plant_code", "")]
         elif action == "plant_master_reconcile":
-            codes.update(str(c).strip().upper() for c in data.get("deactivated", []))
-    return codes
+            codes = data.get("deactivated", [])
+        else:
+            continue
+        day = created_at.date() if created_at else date.min
+        for code in codes:
+            code = str(code).strip().upper()
+            changed[code] = max(changed.get(code, date.min), day)
+    return changed
 
 
 def _activate_or_report_inactive_producing(plant_codes: set[str]) -> tuple[list[dict], list[dict]]:
     """Activate untouched inactive plants that just started producing.
 
-    Returns (activated, reported). A plant is activated only when no admin or
-    baseline reset ever deactivated it and its first production is recent.
-    Everything else that is inactive but producing is only reported.
+    Returns (activated, reported). A plant is activated when its first
+    production is recent and it was not switched off by an admin or the
+    baseline reset after it had already produced (a plant switched off while
+    still empty is just a placeholder). Everything else that is inactive but
+    producing is only reported.
     """
     if not plant_codes:
         return [], []
 
-    deliberate = _deliberately_inactive_codes()
+    last_changed = _last_status_changes()
     since = date.today() - timedelta(days=NEW_PRODUCTION_WINDOW_DAYS)
     first_production = dict(
         db.session.query(PlantDailyVolume.plant_code, func.min(PlantDailyVolume.entry_date))
@@ -136,8 +144,8 @@ def _activate_or_report_inactive_producing(plant_codes: set[str]) -> tuple[list[
         first = first_production.get(code)
         if plant is None or plant.is_active or first is None:
             continue
-        if code in deliberate:
-            reported.append({"plant_code": code, "reason": "deactivated by an admin or the baseline reset"})
+        if code in last_changed and last_changed[code] >= first:
+            reported.append({"plant_code": code, "reason": "deactivated by an admin or the baseline reset after it had produced"})
         elif first < since:
             reported.append({"plant_code": code, "reason": f"long-standing inactive plant, produced since {first.isoformat()}"})
         else:
@@ -147,7 +155,7 @@ def _activate_or_report_inactive_producing(plant_codes: set[str]) -> tuple[list[
                 "erp_name": plant.erp_name or plant.daily_tracker_name,
                 "first_production": first.isoformat(),
             })
-            logger.info(f"Activated {code}: first production on {first} and never switched off by an admin")
+            logger.info(f"Activated {code}: first production on {first}, not switched off after producing")
     return activated, reported
 
 

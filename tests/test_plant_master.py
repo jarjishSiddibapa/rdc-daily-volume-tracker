@@ -11,7 +11,7 @@ from openpyxl import Workbook
 from app import db
 from app.models import AuditLog, Plant, PlantDailyVolume
 from app.services.erp_sync import (
-    _activate_or_report_inactive_producing,
+    _activate_inactive_plants_with_activity,
     _sync_erp_organization_master,
 )
 from app.services.plant_master import (
@@ -145,26 +145,21 @@ class PlantMasterTests(TestCase):
         )
         self.assertEqual(find_recent_production([]), {})
 
-    def test_inactive_plant_is_activated_unless_switched_off_after_producing(self):
+    def test_inactive_plant_with_recent_activity_is_activated_unless_switched_off_since(self):
         today = date.today()
-        long_ago = datetime.now() - timedelta(days=100)
+        recent = today - timedelta(days=3)
         db.session.add_all([
             Plant(plant_code=code, daily_tracker_name=code, erp_name=f"ERP {code}", is_active=False)
-            for code in ("NEW", "EMP", "ADM", "OLD", "RST")
+            for code in ("NEW", "EMP", "ADM", "RST")
         ])
         db.session.commit()
         db.session.add_all([
             # Explicit ids: SQLite does not auto-number BigInteger primary keys.
-            PlantDailyVolume(id=1, plant_code="NEW", entry_date=today - timedelta(days=3), volume=10),
-            PlantDailyVolume(id=2, plant_code="EMP", entry_date=today - timedelta(days=3), volume=10),
-            PlantDailyVolume(id=3, plant_code="ADM", entry_date=today - timedelta(days=3), volume=10),
-            PlantDailyVolume(id=4, plant_code="OLD", entry_date=today - timedelta(days=3), volume=10),
-            PlantDailyVolume(id=5, plant_code="OLD", entry_date=today - timedelta(days=120), volume=10),
-            PlantDailyVolume(id=6, plant_code="RST", entry_date=today - timedelta(days=3), volume=10),
-            # EMP was switched off while still empty, long before its first production.
-            AuditLog(id=1, username="admin", action="plant_update", created_at=long_ago,
+            # EMP was switched off long ago, before the activity below.
+            AuditLog(id=1, username="admin", action="plant_update",
+                     created_at=datetime.now() - timedelta(days=100),
                      details=json.dumps({"plant_code": "EMP", "active_changed": True, "is_active": False})),
-            # ADM and RST were switched off after they had already produced.
+            # ADM and RST were switched off today, after the activity below.
             AuditLog(id=2, username="admin", action="plant_update", created_at=datetime.now(),
                      details=json.dumps({"plant_code": "ADM", "active_changed": True, "is_active": False})),
             AuditLog(id=3, username="system", action="plant_master_reconcile", created_at=datetime.now(),
@@ -172,18 +167,22 @@ class PlantMasterTests(TestCase):
         ])
         db.session.commit()
 
-        activated, reported = _activate_or_report_inactive_producing(
-            {"NEW", "EMP", "ADM", "OLD", "RST"}
+        activated, reported = _activate_inactive_plants_with_activity(
+            {code: recent for code in ("NEW", "EMP", "ADM", "RST")}
         )
         db.session.commit()
 
         self.assertEqual(sorted(a["plant_code"] for a in activated), ["EMP", "NEW"])
-        self.assertEqual(sorted(r["plant_code"] for r in reported), ["ADM", "OLD", "RST"])
+        self.assertEqual(sorted(r["plant_code"] for r in reported), ["ADM", "RST"])
         for code in ("NEW", "EMP"):
             self.assertTrue(db.session.get(Plant, code).is_active)
-        for code in ("ADM", "OLD", "RST"):
+        for code in ("ADM", "RST"):
             self.assertFalse(db.session.get(Plant, code).is_active)
-        self.assertEqual(_activate_or_report_inactive_producing(set()), ([], []))
+
+        # Activity on a day after the switch-off activates the plant again.
+        activated, _ = _activate_inactive_plants_with_activity({"ADM": today + timedelta(days=1)})
+        self.assertEqual([a["plant_code"] for a in activated], ["ADM"])
+        self.assertEqual(_activate_inactive_plants_with_activity({}), ([], []))
 
     def test_future_master_sync_preserves_existing_status_and_tracker_name(self):
         db.session.add_all([

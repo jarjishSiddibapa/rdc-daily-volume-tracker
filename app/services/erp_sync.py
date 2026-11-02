@@ -23,11 +23,9 @@ logger = logging.getLogger(__name__)
 # ERP plant sync is only allowed from this date onwards
 ERP_SYNC_START_DATE = date(2026, 5, 1)
 
-# An inactive plant that produced within this many days is reported by the sync.
-INACTIVE_PRODUCING_DAYS = 14
-# An untouched inactive plant whose first-ever production is this recent has
-# just started producing and is activated like any other new plant.
-NEW_PRODUCTION_WINDOW_DAYS = 45
+# Production or invoicing within this many days counts as activity for an
+# inactive plant; older months being re-synced never activate a plant.
+INACTIVE_ACTIVITY_DAYS = 14
 
 
 def _sync_erp_organization_master() -> dict:
@@ -117,45 +115,40 @@ def _last_status_changes() -> dict[str, date]:
     return changed
 
 
-def _activate_or_report_inactive_producing(plant_codes: set[str]) -> tuple[list[dict], list[dict]]:
-    """Activate untouched inactive plants that just started producing.
+def _activate_inactive_plants_with_activity(activity: dict[str, date]) -> tuple[list[dict], list[dict]]:
+    """Activate inactive plants that produced or invoiced something recently.
 
-    Returns (activated, reported). A plant is activated when its first
-    production is recent and it was not switched off by an admin or the
-    baseline reset after it had already produced (a plant switched off while
-    still empty is just a placeholder). Everything else that is inactive but
-    producing is only reported.
+    ``activity`` maps a plant code to the latest recent production or invoice
+    day the sync saw for it. A plant is activated when that day is later than
+    the day an admin or the baseline reset last switched it off (or it was
+    never switched off). Activity on or before that day is only reported, so a
+    plant switched off today is not flipped back by yesterday's volume.
+
+    Returns (activated, reported).
     """
-    if not plant_codes:
+    if not activity:
         return [], []
 
     last_changed = _last_status_changes()
-    since = date.today() - timedelta(days=NEW_PRODUCTION_WINDOW_DAYS)
-    first_production = dict(
-        db.session.query(PlantDailyVolume.plant_code, func.min(PlantDailyVolume.entry_date))
-        .filter(PlantDailyVolume.plant_code.in_(plant_codes), PlantDailyVolume.volume > 0)
-        .group_by(PlantDailyVolume.plant_code)
-        .all()
-    )
-
     activated, reported = [], []
-    for code in sorted(plant_codes):
+    for code, last_activity in sorted(activity.items()):
         plant = db.session.get(Plant, code)
-        first = first_production.get(code)
-        if plant is None or plant.is_active or first is None:
+        if plant is None or plant.is_active:
             continue
-        if code in last_changed and last_changed[code] >= first:
-            reported.append({"plant_code": code, "reason": "deactivated by an admin or the baseline reset after it had produced"})
-        elif first < since:
-            reported.append({"plant_code": code, "reason": f"long-standing inactive plant, produced since {first.isoformat()}"})
-        else:
-            plant.is_active = True
-            activated.append({
+        switched_off = last_changed.get(code)
+        if switched_off is not None and last_activity <= switched_off:
+            reported.append({
                 "plant_code": code,
-                "erp_name": plant.erp_name or plant.daily_tracker_name,
-                "first_production": first.isoformat(),
+                "reason": f"switched off on {switched_off.isoformat()}; no later production or invoice",
             })
-            logger.info(f"Activated {code}: first production on {first}, not switched off after producing")
+            continue
+        plant.is_active = True
+        activated.append({
+            "plant_code": code,
+            "erp_name": plant.erp_name or plant.daily_tracker_name,
+            "last_activity": last_activity.isoformat(),
+        })
+        logger.info(f"Activated {code}: production or invoice on {last_activity}")
     return activated, reported
 
 
@@ -206,7 +199,8 @@ def sync_erp_data(months: list[tuple[date, date]] | None = None) -> dict:
     synced_daily = 0
     synced_monthly = 0
     synced_invoice_only = 0
-    inactive_producing: set[str] = set()
+    inactive_activity: dict[str, date] = {}
+    activity_since = date.today() - timedelta(days=INACTIVE_ACTIVITY_DAYS)
     skipped = 0
     new_plants = 0
     new_plant_details = []
@@ -325,8 +319,8 @@ def sync_erp_data(months: list[tuple[date, date]] | None = None) -> dict:
                 else:
                     continue
 
-            if not plant.is_active and entry_date >= date.today() - timedelta(days=INACTIVE_PRODUCING_DAYS):
-                inactive_producing.add(plant_code)
+            if not plant.is_active and entry_date >= activity_since:
+                inactive_activity[plant_code] = max(inactive_activity.get(plant_code, entry_date), entry_date)
 
             try:
                 inv_qty = inv_lookup.get((plant_code, prod_date_str), 0.0)
@@ -354,17 +348,19 @@ def sync_erp_data(months: list[tuple[date, date]] | None = None) -> dict:
         # returned a zero-volume row). Store those invoices too, leaving any
         # existing volume untouched.
         if inv_data_available:
-            known_plants = {code for (code,) in db.session.query(Plant.plant_code).all()}
+            plant_status = dict(db.session.query(Plant.plant_code, Plant.is_active).all())
             for (plant_code, inv_date_str), inv_qty in inv_lookup.items():
                 if (plant_code, inv_date_str) in production_keys or inv_qty == 0:
                     continue
-                if plant_code in manual_plants or plant_code not in known_plants:
+                if plant_code in manual_plants or plant_code not in plant_status:
                     continue
                 try:
                     entry_date = datetime.strptime(inv_date_str, "%Y-%m-%d").date()
                 except ValueError:
                     errors.append(f"{plant_code}: invalid invoice date {inv_date_str}")
                     continue
+                if inv_qty > 0 and not plant_status[plant_code] and entry_date >= activity_since:
+                    inactive_activity[plant_code] = max(inactive_activity.get(plant_code, entry_date), entry_date)
                 try:
                     upsert = mysql_insert(PlantDailyVolume.__table__).values(
                         plant_code=plant_code,
@@ -380,8 +376,8 @@ def sync_erp_data(months: list[tuple[date, date]] | None = None) -> dict:
 
         all_synced_plants[month_start] = synced_plants_this_month
 
-    # ── Plants that are inactive yet producing ───────────────────────────────
-    activated_plants, inactive_reported = _activate_or_report_inactive_producing(inactive_producing)
+    # ── Inactive plants that produced or invoiced ────────────────────────────
+    activated_plants, inactive_reported = _activate_inactive_plants_with_activity(inactive_activity)
     new_plants += len(activated_plants)
     new_plant_details.extend(activated_plants)
 

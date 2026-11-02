@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- ERP sync now activates inactive plants whose first production is recent unless an admin or the baseline reset switched them off after they had produced (placeholders created by the baseline reset qualify), and reports other inactive-but-producing plants in the sync response and toast.
+- ERP sync now activates any inactive plant that produces or invoices within 14 days unless an admin or the baseline reset switched it off on or after that day, and reports the rest in the sync response and toast.
 - Shortened the page and login footers to "made with ❤ by Jarjish".
 - Added `scripts/backfill_erp_sync.py` to re-sync past months, and let `sync_erp_data` take an explicit month range.
 - ERP daily production now adds `XXRDC_IMPORTSO_DATA_STG` (DD-MM-YYYY dates) to `rdc_batch_trx_headers`, summing both sources per plant and day, because some plants record batches only in the staging table.

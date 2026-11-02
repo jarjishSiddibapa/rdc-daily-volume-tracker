@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Shortened the page and login footers to "made with ❤ by Jarjish".
 - Added `scripts/backfill_erp_sync.py` to re-sync past months, and let `sync_erp_data` take an explicit month range.
 - ERP daily production now adds `XXRDC_IMPORTSO_DATA_STG` (DD-MM-YYYY dates) to `rdc_batch_trx_headers`, summing both sources per plant and day, because some plants record batches only in the staging table.
 - Fixed ERP sync dropping invoiced quantity on days a plant had no production: invoice-only days are now stored with volume 0 and any existing volume is left untouched.

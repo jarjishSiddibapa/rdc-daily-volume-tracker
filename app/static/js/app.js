@@ -453,7 +453,11 @@ async function syncERP() {
         const newPlantText = newPlants.length
             ? ` New active plant${newPlants.length === 1 ? '' : 's'}: ${newPlants.map(p => p.plant_code).join(', ')}.`
             : '';
-        showToast(`ERP Sync complete: ${result.synced_daily} daily entries, ${result.synced_monthly} monthly - ${(result.months || []).join(', ')}.${newPlantText}`, 'success');
+        const inactive = result.inactive_producing || [];
+        const inactiveText = inactive.length
+            ? ` Inactive but producing: ${inactive.map(p => p.plant_code).join(', ')}.`
+            : '';
+        showToast(`ERP Sync complete: ${result.synced_daily} daily entries, ${result.synced_monthly} monthly - ${(result.months || []).join(', ')}.${newPlantText}${inactiveText}`, 'success');
         // Reload dashboard if on that page
         if (typeof loadDashboard === 'function' && document.getElementById('dashboardBody')) {
             loadDashboard({ force: true });

@@ -1,3 +1,4 @@
+import json
 from datetime import date, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -8,8 +9,11 @@ from flask import Flask
 from openpyxl import Workbook
 
 from app import db
-from app.models import Plant, PlantDailyVolume
-from app.services.erp_sync import _sync_erp_organization_master
+from app.models import AuditLog, Plant, PlantDailyVolume
+from app.services.erp_sync import (
+    _activate_or_report_inactive_producing,
+    _sync_erp_organization_master,
+)
 from app.services.plant_master import (
     ActivePlantRecord,
     find_recent_production,
@@ -140,6 +144,37 @@ class PlantMasterTests(TestCase):
             result["P1"]["last_production"], (today - timedelta(days=1)).isoformat()
         )
         self.assertEqual(find_recent_production([]), {})
+
+    def test_inactive_plant_is_activated_only_when_untouched_and_newly_producing(self):
+        today = date.today()
+        db.session.add_all([
+            Plant(plant_code=code, daily_tracker_name=code, erp_name=f"ERP {code}", is_active=False)
+            for code in ("NEW", "ADM", "OLD", "RST")
+        ])
+        db.session.commit()
+        db.session.add_all([
+            # Explicit ids: SQLite does not auto-number BigInteger primary keys.
+            PlantDailyVolume(id=1, plant_code="NEW", entry_date=today - timedelta(days=3), volume=10),
+            PlantDailyVolume(id=2, plant_code="ADM", entry_date=today - timedelta(days=3), volume=10),
+            PlantDailyVolume(id=3, plant_code="OLD", entry_date=today - timedelta(days=3), volume=10),
+            PlantDailyVolume(id=4, plant_code="OLD", entry_date=today - timedelta(days=120), volume=10),
+            PlantDailyVolume(id=5, plant_code="RST", entry_date=today - timedelta(days=3), volume=10),
+            AuditLog(id=1, username="admin", action="plant_update",
+                     details=json.dumps({"plant_code": "ADM", "active_changed": True, "is_active": False})),
+            AuditLog(id=2, username="system", action="plant_master_reconcile",
+                     details=json.dumps({"deactivated": ["RST"]})),
+        ])
+        db.session.commit()
+
+        activated, reported = _activate_or_report_inactive_producing({"NEW", "ADM", "OLD", "RST"})
+        db.session.commit()
+
+        self.assertEqual([a["plant_code"] for a in activated], ["NEW"])
+        self.assertEqual(sorted(r["plant_code"] for r in reported), ["ADM", "OLD", "RST"])
+        self.assertTrue(db.session.get(Plant, "NEW").is_active)
+        for code in ("ADM", "OLD", "RST"):
+            self.assertFalse(db.session.get(Plant, code).is_active)
+        self.assertEqual(_activate_or_report_inactive_producing(set()), ([], []))
 
     def test_future_master_sync_preserves_existing_status_and_tracker_name(self):
         db.session.add_all([

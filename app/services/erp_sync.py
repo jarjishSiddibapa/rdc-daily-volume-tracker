@@ -1,12 +1,14 @@
 """ERP sync service — fetches Oracle data and upserts into MySQL."""
 
+import json
 import logging
 from datetime import date, timedelta, datetime
 
+from sqlalchemy import func
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 
 from app import db
-from app.models import Plant, PlantDailyVolume
+from app.models import AuditLog, Plant, PlantDailyVolume
 from app.oracle_service import (
     fetch_erp_daily_invoiced,
     fetch_erp_daily_production,
@@ -20,6 +22,12 @@ logger = logging.getLogger(__name__)
 
 # ERP plant sync is only allowed from this date onwards
 ERP_SYNC_START_DATE = date(2026, 5, 1)
+
+# An inactive plant that produced within this many days is reported by the sync.
+INACTIVE_PRODUCING_DAYS = 14
+# An untouched inactive plant whose first-ever production is this recent has
+# just started producing and is activated like any other new plant.
+NEW_PRODUCTION_WINDOW_DAYS = 45
 
 
 def _sync_erp_organization_master() -> dict:
@@ -85,6 +93,64 @@ def _sync_erp_organization_master() -> dict:
     }
 
 
+def _deliberately_inactive_codes() -> set[str]:
+    """Plants an admin switched on/off, or the baseline reset deactivated."""
+    codes: set[str] = set()
+    entries = AuditLog.query.filter(
+        AuditLog.action.in_(["plant_update", "plant_master_reconcile"])
+    ).with_entities(AuditLog.action, AuditLog.details).all()
+    for action, details in entries:
+        try:
+            data = json.loads(details or "{}")
+        except ValueError:
+            continue
+        if action == "plant_update" and data.get("active_changed"):
+            codes.add(str(data.get("plant_code", "")).strip().upper())
+        elif action == "plant_master_reconcile":
+            codes.update(str(c).strip().upper() for c in data.get("deactivated", []))
+    return codes
+
+
+def _activate_or_report_inactive_producing(plant_codes: set[str]) -> tuple[list[dict], list[dict]]:
+    """Activate untouched inactive plants that just started producing.
+
+    Returns (activated, reported). A plant is activated only when no admin or
+    baseline reset ever deactivated it and its first production is recent.
+    Everything else that is inactive but producing is only reported.
+    """
+    if not plant_codes:
+        return [], []
+
+    deliberate = _deliberately_inactive_codes()
+    since = date.today() - timedelta(days=NEW_PRODUCTION_WINDOW_DAYS)
+    first_production = dict(
+        db.session.query(PlantDailyVolume.plant_code, func.min(PlantDailyVolume.entry_date))
+        .filter(PlantDailyVolume.plant_code.in_(plant_codes), PlantDailyVolume.volume > 0)
+        .group_by(PlantDailyVolume.plant_code)
+        .all()
+    )
+
+    activated, reported = [], []
+    for code in sorted(plant_codes):
+        plant = db.session.get(Plant, code)
+        first = first_production.get(code)
+        if plant is None or plant.is_active or first is None:
+            continue
+        if code in deliberate:
+            reported.append({"plant_code": code, "reason": "deactivated by an admin or the baseline reset"})
+        elif first < since:
+            reported.append({"plant_code": code, "reason": f"long-standing inactive plant, produced since {first.isoformat()}"})
+        else:
+            plant.is_active = True
+            activated.append({
+                "plant_code": code,
+                "erp_name": plant.erp_name or plant.daily_tracker_name,
+                "first_production": first.isoformat(),
+            })
+            logger.info(f"Activated {code}: first production on {first} and never switched off by an admin")
+    return activated, reported
+
+
 def _get_months_to_sync() -> list[tuple[date, date]]:
     """
     Return a list of (month_start, month_end) tuples to sync.
@@ -132,6 +198,7 @@ def sync_erp_data(months: list[tuple[date, date]] | None = None) -> dict:
     synced_daily = 0
     synced_monthly = 0
     synced_invoice_only = 0
+    inactive_producing: set[str] = set()
     skipped = 0
     new_plants = 0
     new_plant_details = []
@@ -250,6 +317,9 @@ def sync_erp_data(months: list[tuple[date, date]] | None = None) -> dict:
                 else:
                     continue
 
+            if not plant.is_active and entry_date >= date.today() - timedelta(days=INACTIVE_PRODUCING_DAYS):
+                inactive_producing.add(plant_code)
+
             try:
                 inv_qty = inv_lookup.get((plant_code, prod_date_str), 0.0)
                 update_fields = {"volume": daily_volume}
@@ -302,6 +372,11 @@ def sync_erp_data(months: list[tuple[date, date]] | None = None) -> dict:
 
         all_synced_plants[month_start] = synced_plants_this_month
 
+    # ── Plants that are inactive yet producing ───────────────────────────────
+    activated_plants, inactive_reported = _activate_or_report_inactive_producing(inactive_producing)
+    new_plants += len(activated_plants)
+    new_plant_details.extend(activated_plants)
+
     # ── Recalculate monthly volumes from daily entries (batch: ~3 queries/month) ─
     for m_start, plant_codes in all_synced_plants.items():
         try:
@@ -325,6 +400,8 @@ def sync_erp_data(months: list[tuple[date, date]] | None = None) -> dict:
         "synced_invoice_only": synced_invoice_only,
         "new_plants": new_plants,
         "new_plant_details": new_plant_details,
+        "activated_plants": activated_plants,
+        "inactive_producing": inactive_reported,
         "organization_master_count": organization_master_count,
         "erp_names_updated": erp_names_updated,
         "months": months_synced,
@@ -340,6 +417,7 @@ def sync_erp_data(months: list[tuple[date, date]] | None = None) -> dict:
         "skipped": skipped,
         "new_plants": new_plants,
         "new_plant_details": new_plant_details,
+        "inactive_producing": inactive_reported,
         "organization_master_count": organization_master_count,
         "erp_names_updated": erp_names_updated,
         "errors": errors,

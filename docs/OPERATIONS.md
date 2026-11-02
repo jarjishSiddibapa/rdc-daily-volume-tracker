@@ -9,7 +9,7 @@
 
 ## ERP synchronization
 
-ERP synchronization runs every 30 minutes and can also be triggered from the dashboard. It first checks the enabled, inventory-enabled Oracle organization master, then synchronizes recent production and invoicing. Existing active/inactive status and tracker names are preserved. A completely new organization code is created as active and reported in the sync response.
+ERP synchronization runs every 30 minutes and can also be triggered from the dashboard. It first checks the enabled, inventory-enabled Oracle organization master, then synchronizes recent production and invoicing. Existing active/inactive status and tracker names are preserved. A completely new organization code is created as active and reported in the sync response. An inactive plant that starts producing is also activated and reported as new, provided its first-ever production is within the last 45 days and no admin or baseline reset ever deactivated it. Any other inactive plant that produced in the last 14 days (for example one an admin switched off) is left inactive and listed as `inactive_producing` in the sync response and the audit log.
 
 Daily production is the sum of two ERP sources per plant and day: `rdc_batch_trx_headers` and `XXRDC_IMPORTSO_DATA_STG` (its `DD-MM-YYYY` dates are converted). Invoiced quantity is stored for every day the ERP reports an invoice, even when the plant produced nothing that day.
 
